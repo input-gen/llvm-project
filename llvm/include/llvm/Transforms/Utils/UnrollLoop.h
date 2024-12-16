@@ -37,6 +37,7 @@ class OptimizationRemarkEmitter;
 class ScalarEvolution;
 class StringRef;
 class Value;
+class UnrollAdvice;
 
 using NewLoopsMap = SmallDenseMap<const Loop *, Loop *, 4>;
 
@@ -48,6 +49,12 @@ const char *const LLVMLoopUnrollFollowupUnrolled =
 const char *const LLVMLoopUnrollFollowupRemainder =
     "llvm.loop.unroll.followup_remainder";
 /// @}
+
+/// A magic value for use with the Threshold parameter to indicate
+/// that the loop unroll should be performed regardless of how much
+/// code expansion would result.
+static const unsigned LoopUnrollNoThreshold =
+    std::numeric_limits<unsigned>::max();
 
 LLVM_ABI const Loop *addClonedBlockToLoopInfo(BasicBlock *OriginalBB,
                                               BasicBlock *ClonedBB,
@@ -154,14 +161,16 @@ public:
                       unsigned CountOverwrite = 0) const;
 };
 
-LLVM_ABI bool computeUnrollCount(
-    Loop *L, const TargetTransformInfo &TTI, DominatorTree &DT, LoopInfo *LI,
-    AssumptionCache *AC, ScalarEvolution &SE,
-    const SmallPtrSetImpl<const Value *> &EphValues,
-    OptimizationRemarkEmitter *ORE, unsigned TripCount, unsigned MaxTripCount,
-    bool MaxOrZero, unsigned TripMultiple, const UnrollCostEstimator &UCE,
-    TargetTransformInfo::UnrollingPreferences &UP,
-    TargetTransformInfo::PeelingPreferences &PP, bool &UseUpperBound);
+LLVM_ABI bool
+computeUnrollCount(Loop *L, const TargetTransformInfo &TTI, DominatorTree &DT,
+                   LoopInfo *LI, AssumptionCache *AC, ScalarEvolution &SE,
+                   const SmallPtrSetImpl<const Value *> &EphValues,
+                   OptimizationRemarkEmitter *ORE, unsigned TripCount,
+                   unsigned MaxTripCount, bool MaxOrZero, unsigned TripMultiple,
+                   const UnrollCostEstimator &UCE,
+                   TargetTransformInfo::UnrollingPreferences &UP,
+                   TargetTransformInfo::PeelingPreferences &PP,
+                   bool &UseUpperBound, UnrollAdvice &Advice);
 
 } // end namespace llvm
 

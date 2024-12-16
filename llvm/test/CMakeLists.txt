@@ -96,6 +96,7 @@ set(LLVM_TEST_DEPENDS
           llvm-dwp
           llvm-exegesis
           llvm-extract
+          llvm-extract-loops
           llvm-gsymutil
           llvm-isel-fuzzer
           llvm-ifs

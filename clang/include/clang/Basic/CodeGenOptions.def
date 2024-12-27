@@ -484,6 +484,8 @@ CODEGENOPT(ResMayAlias, 1, 0)
 /// Enables unwind v2 (epilog) information for x64 Windows.
 CODEGENOPT(WinX64EHUnwindV2, 1, 0)
 
+CODEGENOPT(Instrumentor, 1, 0) ///< Enable Instrumentor
+
 /// FIXME: Make DebugOptions its own top-level .def file.
 #include "DebugOptions.def"
 

@@ -1610,10 +1610,6 @@ PassBuilder::buildModuleOptimizationPipeline(OptimizationLevel Level,
   // Run the InputGen memory pass late.
   MPM.addPass(InputGenInstrumentMemoryPass());
 
-  // Run the Instrumentor pass late.
-  if (EnableInstrumentor)
-    MPM.addPass(InstrumentorPass());
-
   // Split out cold code. Splitting is done late to avoid hiding context from
   // other optimizations and inadvertently regressing performance. The tradeoff
   // is that this has a higher code size cost than splitting early.
@@ -2169,6 +2165,9 @@ PassBuilder::buildLTODefaultPipeline(OptimizationLevel Level,
   // in ICP (which is performed earlier than this in the regular LTO pipeline).
   MPM.addPass(LowerTypeTestsPass(nullptr, nullptr,
                                  lowertypetests::DropTestKind::Assume));
+
+  // Run the InputGen memory pass late.
+  MPM.addPass(InputGenInstrumentMemoryPass());
 
   // Enable splitting late in the FullLTO post-link pipeline.
   if (EnableHotColdSplit)

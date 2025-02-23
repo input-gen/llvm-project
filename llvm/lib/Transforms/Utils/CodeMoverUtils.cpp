@@ -16,6 +16,7 @@
 #include "llvm/Analysis/DependenceAnalysis.h"
 #include "llvm/Analysis/PostDominators.h"
 #include "llvm/Analysis/ValueTracking.h"
+#include "llvm/IR/CFG.h"
 #include "llvm/IR/Dominators.h"
 
 using namespace llvm;
@@ -30,67 +31,13 @@ STATISTIC(NotControlFlowEquivalent,
 STATISTIC(NotMovedPHINode, "Movement of PHINodes are not supported");
 STATISTIC(NotMovedTerminator, "Movement of Terminator are not supported");
 
-namespace {
-/// Represent a control condition. A control condition is a condition of a
-/// terminator to decide which successors to execute. The pointer field
-/// represents the address of the condition of the terminator. The integer field
-/// is a bool, it is true when the basic block is executed when V is true. For
-/// example, `br %cond, bb0, bb1` %cond is a control condition of bb0 with the
-/// integer field equals to true, while %cond is a control condition of bb1 with
-/// the integer field equals to false.
-using ControlCondition = PointerIntPair<Value *, 1, bool>;
 #ifndef NDEBUG
-raw_ostream &operator<<(raw_ostream &OS, const ControlCondition &C) {
+raw_ostream &llvm::operator<<(raw_ostream &OS, const ControlCondition &C) {
   OS << "[" << *C.getPointer() << ", " << (C.getInt() ? "true" : "false")
      << "]";
   return OS;
 }
 #endif
-
-/// Represent a set of control conditions required to execute ToBB from FromBB.
-class ControlConditions {
-  using ConditionVectorTy = SmallVector<ControlCondition, 6>;
-
-  /// A SmallVector of control conditions.
-  ConditionVectorTy Conditions;
-
-public:
-  /// Return a ControlConditions which stores all conditions required to execute
-  /// \p BB from \p Dominator. If \p MaxLookup is non-zero, it limits the
-  /// number of conditions to collect. Return std::nullopt if not all conditions
-  /// are collected successfully, or we hit the limit.
-  static const std::optional<ControlConditions>
-  collectControlConditions(const BasicBlock &BB, const BasicBlock &Dominator,
-                           const DominatorTree &DT,
-                           const PostDominatorTree &PDT,
-                           unsigned MaxLookup = 6);
-
-  /// Return true if there exists no control conditions required to execute ToBB
-  /// from FromBB.
-  bool isUnconditional() const { return Conditions.empty(); }
-
-  /// Return a constant reference of Conditions.
-  const ConditionVectorTy &getControlConditions() const { return Conditions; }
-
-  /// Add \p V as one of the ControlCondition in Condition with IsTrueCondition
-  /// equals to \p True. Return true if inserted successfully.
-  bool addControlCondition(ControlCondition C);
-
-  /// Return true if for all control conditions in Conditions, there exists an
-  /// equivalent control condition in \p Other.Conditions.
-  bool isEquivalent(const ControlConditions &Other) const;
-
-  /// Return true if \p C1 and \p C2 are equivalent.
-  static bool isEquivalent(const ControlCondition &C1,
-                           const ControlCondition &C2);
-
-private:
-  ControlConditions() = default;
-
-  static bool isEquivalent(const Value &V1, const Value &V2);
-  static bool isInverse(const Value &V1, const Value &V2);
-};
-} // namespace
 
 static bool domTreeLevelBefore(DominatorTree *DT, const Instruction *InstA,
                                const Instruction *InstB) {
@@ -129,7 +76,7 @@ ControlConditions::collectControlConditions(const BasicBlock &BB,
            "Expecting Dominator to dominate IDom");
 
     // Limitation: can only handle branch instruction currently.
-    const BranchInst *BI = dyn_cast<BranchInst>(IDom->getTerminator());
+    BranchInst *BI = dyn_cast<BranchInst>(IDom->getTerminator());
     if (!BI)
       return std::nullopt;
 
@@ -143,13 +90,20 @@ ControlConditions::collectControlConditions(const BasicBlock &BB,
                         << *BI->getCondition() << "\" is true from "
                         << IDom->getName() << "\n");
       Inserted = Conditions.addControlCondition(
-          ControlCondition(BI->getCondition(), true));
+          ControlCondition(BI, true));
     } else if (PDT.dominates(CurBlock, BI->getSuccessor(1))) {
       LLVM_DEBUG(dbgs() << CurBlock->getName() << " is executed when \""
                         << *BI->getCondition() << "\" is false from "
                         << IDom->getName() << "\n");
       Inserted = Conditions.addControlCondition(
-          ControlCondition(BI->getCondition(), false));
+          ControlCondition(BI, false));
+    } else if (!MaxLookup) {
+      for (auto *PredBB : predecessors(CurBlock)) {
+        const BranchInst *BI = dyn_cast<BranchInst>(PredBB->getTerminator());
+        if (!BI)
+          return std::nullopt;
+        return std::nullopt;
+      }
     } else
       return std::nullopt;
 
@@ -208,23 +162,25 @@ bool ControlConditions::isEquivalent(const ControlCondition &C1,
 // Currently, isEquivalent rely on other passes to ensure equivalent conditions
 // have the same value, e.g. GVN.
 bool ControlConditions::isEquivalent(const Value &V1, const Value &V2) {
-  return &V1 == &V2;
+  return cast<BranchInst>(V1).getCondition() ==
+         cast<BranchInst>(V2).getCondition();
 }
 
 bool ControlConditions::isInverse(const Value &V1, const Value &V2) {
-  if (const CmpInst *Cmp1 = dyn_cast<CmpInst>(&V1))
-    if (const CmpInst *Cmp2 = dyn_cast<CmpInst>(&V2)) {
-      if (Cmp1->getPredicate() == Cmp2->getInversePredicate() &&
-          Cmp1->getOperand(0) == Cmp2->getOperand(0) &&
-          Cmp1->getOperand(1) == Cmp2->getOperand(1))
-        return true;
+  auto* Cmp1 = dyn_cast<CmpInst>(cast<BranchInst>(V1).getCondition());
+  auto* Cmp2 = dyn_cast<CmpInst>(cast<BranchInst>(V2).getCondition());
+  if (Cmp1 && Cmp2) {
+    if (Cmp1->getPredicate() == Cmp2->getInversePredicate() &&
+        Cmp1->getOperand(0) == Cmp2->getOperand(0) &&
+        Cmp1->getOperand(1) == Cmp2->getOperand(1))
+      return true;
 
-      if (Cmp1->getPredicate() ==
-              CmpInst::getSwappedPredicate(Cmp2->getInversePredicate()) &&
-          Cmp1->getOperand(0) == Cmp2->getOperand(1) &&
-          Cmp1->getOperand(1) == Cmp2->getOperand(0))
-        return true;
-    }
+    if (Cmp1->getPredicate() ==
+            CmpInst::getSwappedPredicate(Cmp2->getInversePredicate()) &&
+        Cmp1->getOperand(0) == Cmp2->getOperand(1) &&
+        Cmp1->getOperand(1) == Cmp2->getOperand(0))
+      return true;
+  }
   return false;
 }
 

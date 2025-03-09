@@ -12,6 +12,8 @@
 #include "SPIRV.h"
 #include "clang/Basic/Cuda.h"
 #include "clang/Driver/CommonArgs.h"
+#include "clang/Basic/Sanitizers.h"
+#include "clang/Basic/TargetID.h"
 #include "clang/Driver/Compilation.h"
 #include "clang/Driver/Driver.h"
 #include "clang/Driver/InputInfo.h"

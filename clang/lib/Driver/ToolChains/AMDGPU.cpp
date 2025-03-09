@@ -7,6 +7,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "AMDGPU.h"
+#include "CommonArgs.h"
+#include "clang/Basic/Sanitizers.h"
 #include "clang/Basic/TargetID.h"
 #include "clang/Config/config.h"
 #include "clang/Driver/CommonArgs.h"
@@ -1043,7 +1045,7 @@ bool AMDGPUToolChain::shouldSkipSanitizeOption(
 
   // For simplicity, we only allow -fsanitize=address
   SanitizerMask K = parseSanitizerValue(A->getValue(), /*AllowGroups=*/false);
-  if (K != SanitizerKind::Address)
+  if (K != SanitizerKind::Address && K != SanitizerKind::Object)
     return true;
 
   llvm::StringMap<bool> FeatureMap;

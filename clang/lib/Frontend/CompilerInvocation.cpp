@@ -5082,7 +5082,8 @@ bool CompilerInvocation::CreateFromArgsImpl(
       !LangOpts.Sanitize.has(SanitizerKind::Address) &&
       !LangOpts.Sanitize.has(SanitizerKind::KernelAddress) &&
       !LangOpts.Sanitize.has(SanitizerKind::Memory) &&
-      !LangOpts.Sanitize.has(SanitizerKind::KernelMemory);
+      !LangOpts.Sanitize.has(SanitizerKind::KernelMemory) &&
+      !LangOpts.Sanitize.has(SanitizerKind::Object);
 
   ParsePreprocessorArgs(Res.getPreprocessorOpts(), Args, Diags,
                         Res.getFrontendOpts().ProgramAction,

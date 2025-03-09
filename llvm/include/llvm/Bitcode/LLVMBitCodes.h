@@ -799,6 +799,7 @@ enum AttributeKindCodes {
   ATTR_KIND_SANITIZE_TYPE = 101,
   ATTR_KIND_CAPTURES = 102,
   ATTR_KIND_INPUTGEN_ENTRY = 103,
+  ATTR_KIND_SANITIZE_OBJECT = 104,
 };
 
 enum ComdatSelectionKindCodes {

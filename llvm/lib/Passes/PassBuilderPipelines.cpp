@@ -1829,7 +1829,7 @@ ModulePassManager PassBuilder::buildThinLTODefaultPipeline(
     MPM.addPass(LowerTypeTestsPass(nullptr, ImportSummary));
   }
 
-  MPM.addPass(LightSanPass());
+  MPM.addPass(LightSanPass(ThinOrFullLTOPhase::ThinLTOPostLink));
 
   if (Level == OptimizationLevel::O0) {
     // Run a second time to clean up any type tests left behind by WPD for use
@@ -1875,7 +1875,7 @@ PassBuilder::buildLTODefaultPipeline(OptimizationLevel Level,
 
   invokeFullLinkTimeOptimizationEarlyEPCallbacks(MPM, Level);
 
-  MPM.addPass(LightSanPass());
+  MPM.addPass(LightSanPass(ThinOrFullLTOPhase::FullLTOPostLink));
 
   // Create a function that performs CFI checks for cross-DSO calls with targets
   // in the current module.

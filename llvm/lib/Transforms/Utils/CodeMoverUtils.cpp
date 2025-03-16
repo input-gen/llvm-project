@@ -31,13 +31,11 @@ STATISTIC(NotControlFlowEquivalent,
 STATISTIC(NotMovedPHINode, "Movement of PHINodes are not supported");
 STATISTIC(NotMovedTerminator, "Movement of Terminator are not supported");
 
-#ifndef NDEBUG
 raw_ostream &llvm::operator<<(raw_ostream &OS, const ControlCondition &C) {
   OS << "[" << *C.getPointer() << ", " << (C.getInt() ? "true" : "false")
      << "]";
   return OS;
 }
-#endif
 
 static bool domTreeLevelBefore(DominatorTree *DT, const Instruction *InstA,
                                const Instruction *InstB) {

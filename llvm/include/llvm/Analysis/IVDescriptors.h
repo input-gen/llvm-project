@@ -55,11 +55,12 @@ enum class RecurKind {
   IFindLastIV, ///< FindLast reduction with select(icmp(),x,y) where one of
                ///< (x,y) is increasing loop induction, and both x and y are
                ///< integer type.
-  FFindLastIV ///< FindLast reduction with select(fcmp(),x,y) where one of (x,y)
-              ///< is increasing loop induction, and both x and y are integer
-              ///< type.
+  FFindLastIV, ///< FindLast reduction with select(fcmp(),x,y) where one of
+               ///< (x,y) is increasing loop induction, and both x and y are
+               ///< integer type.
   // TODO: Any_of and FindLast reduction need not be restricted to integer type
   // only.
+  NumRecurKinds
 };
 
 /// The RecurrenceDescriptor is used to identify recurrences variables in a

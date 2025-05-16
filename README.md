@@ -1,11 +1,5 @@
-## Generating ComPileLoop from ComPile
+# input-gen LLVM
 
-```
-python3 ./llvm/utils/mlgo-utils/com-pile-utils/extract_loops.py --dataset path/to/ComPile-Public-V2/ --output-dataset ./ComPileLoop --num 10
-```
+This is input-gen's fork of LLVM.
 
-## ComPileLoop processing demo 
-
-```
-python3 ./llvm/utils/mlgo-utils/com-pile-utils/read_loops_demo.py --dataset ./ComPileLoop
-```
+[See here for details](https://github.com/input-gen/ml-compiler-opt)

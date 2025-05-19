@@ -114,6 +114,7 @@ add_llvm_component_library(LLVMAnalysis
   LoopUnrollAdvisor.cpp
   DevelopmentModeUnrollAdvisor.cpp
   MLInlineAdvisor.cpp
+  MLUnrollAdvisor.cpp
   MemDerefPrinter.cpp
   MemoryBuiltins.cpp
   MemoryDependenceAnalysis.cpp

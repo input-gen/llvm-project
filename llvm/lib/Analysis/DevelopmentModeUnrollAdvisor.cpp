@@ -339,7 +339,7 @@ DevelopmentUnrollAdvisor::getAdviceImpl(UnrollAdviceInfo UAI) {
   UnrollDecisionTy UD = ModelRunner->getOutput<UnrollDecisionTy>();
   // The model gives us a speedup estimate for each unroll factor in
   // [2,MaxUnrollFactor] whose indices are offset by UnrollFactorOffset.
-  auto MaxEl = std::max_element(UD.Out, UD.Out + UnrollModelOutputLength);
+  float *MaxEl = std::max_element(UD.Out, UD.Out + UnrollModelOutputLength);
 
   // Only unroll if the biggest estimated speedup is greater than 1.0.
   std::optional<unsigned> UnrollFactor;

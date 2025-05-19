@@ -126,6 +126,7 @@ UnrollAdvisor &getUnrollAdvisor(LLVMContext &Ctx);
 std::unique_ptr<UnrollAdvisor> getDefaultModeUnrollAdvisor(LLVMContext &Ctx);
 std::unique_ptr<UnrollAdvisor>
 getDevelopmentModeUnrollAdvisor(LLVMContext &Ctx);
+std::unique_ptr<UnrollAdvisor> getReleaseModeUnrollAdvisor(LLVMContext &Ctx);
 
 /// The default heuristic
 std::optional<unsigned>

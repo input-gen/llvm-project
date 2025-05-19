@@ -176,7 +176,7 @@ UnrollAdvisor &getUnrollAdvisor(LLVMContext &Ctx) {
     case UnrollAdvisorMode::Default:
       return getDefaultModeUnrollAdvisor(Ctx);
     case UnrollAdvisorMode::Release:
-      llvm_unreachable("Release mode for UnrollAdvisor not yet implemented");
+      return getReleaseModeUnrollAdvisor(Ctx);
     case UnrollAdvisorMode::Development:
       return getDevelopmentModeUnrollAdvisor(Ctx);
     }

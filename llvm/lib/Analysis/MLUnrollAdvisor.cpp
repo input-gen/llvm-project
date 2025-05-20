@@ -20,7 +20,7 @@ llvm::getReleaseModeUnrollAdvisor(LLVMContext &Ctx) {
   std::unique_ptr<MLModelRunner> AOTRunner;
   AOTRunner = ModelUnderTrainingRunner::createAndEnsureValid(
       Ctx, ModelPathEnv, UnrollDecisionName, UnrollFeatureMap);
-  return std::make_unique<MLUnrollAdvisor>(Ctx);
+  return std::make_unique<MLUnrollAdvisor>(Ctx, std::move(AOTRunner));
 }
 
 std::unique_ptr<UnrollAdvice>
@@ -29,6 +29,14 @@ MLUnrollAdvisor::getAdviceImpl(UnrollAdviceInfo UAI) {
   // unroll pass
   LoopPropertiesInfo LPI = LoopPropertiesInfo::get(
       UAI.L, UAI.LI, UAI.SE, UAI.TTI, UAI.TLI, UAI.AA, UAI.DT, UAI.AC);
+
+#define CLIP(VAL, BOUND) VAL = VAL > BOUND ? BOUND : VAL
+  CLIP(UAI.TripCount, 257);
+  CLIP(LPI.MaxSaveVectorWidthInBits, 257);
+  CLIP(LPI.MaxPHIChainRecipThroughput, 300);
+#undef CLIP
+  if (LPI.LoopBackEdgeCount.ugt(257))
+    LPI.LoopBackEdgeCount = 257;
 
 #define SET(NAME, val)                                                         \
   *ModelRunner->getTensor<int64_t>(UnrollFeatureIndex::NAME) =                 \

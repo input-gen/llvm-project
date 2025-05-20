@@ -104,7 +104,7 @@ LoopPropertiesInfo::get(Loop &L, LoopInfo &LI, ScalarEvolution &SE,
   if (LoopBounds) {
     LPI.BoundsAreSimple = true;
     LPI.IsInitialValueConstant = isa<Constant>(LoopBounds->getInitialIVValue());
-    LPI.IsStepConstant = isa<Constant>(LoopBounds->getStepValue());
+    LPI.IsStepConstant = dyn_cast_or_null<Constant>(LoopBounds->getStepValue());
     LPI.IsFinalValueConstant = isa<Constant>(LoopBounds->getFinalIVValue());
   }
 

@@ -182,6 +182,7 @@ UnrollAdvisor &getUnrollAdvisor(LLVMContext &Ctx) {
     }
     llvm_unreachable("Unknown mode");
   }();
+  assert(Advisor);
   return *Advisor;
 }
 

@@ -20,7 +20,7 @@ class UnrollCostEstimator;
 enum class UnrollAdvisorMode : int { Default, Release, Development };
 
 struct UnrollAdviceInfo {
-  const unsigned TripCount;
+  unsigned TripCount;
   const UnrollCostEstimator &UCE;
   TargetTransformInfo::UnrollingPreferences &UP;
   ScalarEvolution &SE;

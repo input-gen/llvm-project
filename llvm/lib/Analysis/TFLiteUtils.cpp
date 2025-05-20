@@ -55,7 +55,7 @@ public:
   TFModelEvaluatorImpl(StringRef SavedModelPath,
                        const std::vector<TensorSpec> &InputSpecs,
                        const std::vector<TensorSpec> &OutputSpecs,
-                       const char *Tags);
+                       const char *Tags, const char *InputPrefix);
 
   bool isValid() const { return IsValid; }
   size_t outputSize() const { return Output.size(); }
@@ -99,7 +99,8 @@ private:
 
 TFModelEvaluatorImpl::TFModelEvaluatorImpl(
     StringRef SavedModelPath, const std::vector<TensorSpec> &InputSpecs,
-    const std::vector<TensorSpec> &OutputSpecs, const char *Tags = "serve")
+    const std::vector<TensorSpec> &OutputSpecs, const char *Tags,
+    const char *InputPrefix = "serving_default_")
     : Input(InputSpecs.size()), Output(OutputSpecs.size()) {
   // INFO and DEBUG messages could be numerous and not particularly interesting
   tflite::LoggerOptions::SetMinimumLogSeverity(tflite::TFLITE_LOG_WARNING);
@@ -142,15 +143,17 @@ TFModelEvaluatorImpl::TFModelEvaluatorImpl(
   // Known inputs and outputs
   StringMap<int> InputsMap;
   StringMap<int> OutputsMap;
-  for (size_t I = 0; I < Interpreter->inputs().size(); ++I)
+  for (size_t I = 0; I < Interpreter->inputs().size(); ++I) {
     InputsMap[Interpreter->GetInputName(I)] = I;
-  for (size_t I = 0; I < Interpreter->outputs().size(); ++I)
+  }
+  for (size_t I = 0; I < Interpreter->outputs().size(); ++I) {
     OutputsMap[Interpreter->GetOutputName(I)] = I;
+  }
 
   size_t NumberFeaturesPassed = 0;
   for (size_t I = 0; I < InputSpecs.size(); ++I) {
     auto &InputSpec = InputSpecs[I];
-    auto MapI = InputsMap.find(InputSpec.name() + ":" +
+    auto MapI = InputsMap.find(InputPrefix + InputSpec.name() + ":" +
                                std::to_string(InputSpec.port()));
     if (MapI == InputsMap.end()) {
       Input[I] = nullptr;
@@ -184,9 +187,9 @@ TFModelEvaluatorImpl::TFModelEvaluatorImpl(
 TFModelEvaluator::TFModelEvaluator(StringRef SavedModelPath,
                                    const std::vector<TensorSpec> &InputSpecs,
                                    const std::vector<TensorSpec> &OutputSpecs,
-                                   const char *Tags)
+                                   const char *Tags, const char *InputPrefix)
     : Impl(new TFModelEvaluatorImpl(SavedModelPath, InputSpecs, OutputSpecs,
-                                    Tags)) {
+                                    Tags, InputPrefix)) {
   if (!Impl->isValid())
     Impl.reset();
 }
@@ -196,11 +199,15 @@ TFModelEvaluatorImpl::~TFModelEvaluatorImpl() {}
 bool TFModelEvaluatorImpl::checkReportAndInvalidate(const TfLiteTensor *Tensor,
                                                     const TensorSpec &Spec) {
   if (!Tensor) {
-    errs() << "Could not find TF_Output named: " + Spec.name();
+    errs() << "Could not find TF_Output named: " + Spec.name() << "\n";
     IsValid = false;
   }
-  if (Spec.getTotalTensorBufferSize() != Tensor->bytes)
+  if (Spec.getTotalTensorBufferSize() != Tensor->bytes) {
+    errs() << "Size mismatch for " + Spec.name() + ". "
+           << Spec.getTotalTensorBufferSize() << " != " << Tensor->bytes
+           << "\n";
     IsValid = false;
+  }
 
   // If the total sizes match, there could still be a mismatch in the shape.
   // We ignore that for now.

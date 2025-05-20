@@ -27,7 +27,8 @@ class ProfileSummaryInfo;
 
 class MLUnrollAdvisor : public UnrollAdvisor {
 public:
-  MLUnrollAdvisor(LLVMContext &Ctx) {}
+  MLUnrollAdvisor(LLVMContext &Ctx, std::unique_ptr<MLModelRunner> ModelRunner)
+      : ModelRunner(std::move(ModelRunner)) {}
 
   virtual ~MLUnrollAdvisor() = default;
   void onSuccessfulInlining(const MLUnrollAdvice &Advice,

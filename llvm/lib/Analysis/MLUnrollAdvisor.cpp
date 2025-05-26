@@ -1,10 +1,12 @@
 
 #include "llvm/Analysis/MLUnrollAdvisor.h"
 #include "llvm/Analysis/LoopPropertiesAnalysis.h"
-#include "llvm/Analysis/ModelUnderTrainingRunner.h"
-#include "llvm/Analysis/ReleaseModeModelRunner.h"
 #include "llvm/Analysis/UnrollAdvisor.h"
 #include "llvm/Analysis/UnrollModelFeatureMaps.h"
+
+#if defined(LLVM_HAVE_TFLITE)
+
+#include "llvm/Analysis/ModelUnderTrainingRunner.h"
 
 #define DEBUG_TYPE "loop-unroll-ml-advisor"
 #define DBGS() llvm::dbgs() << "mlgo-loop-unroll: "
@@ -175,3 +177,12 @@ MLUnrollAdvisor::getAdviceImpl(UnrollAdviceInfo UAI) {
 
   return std::make_unique<UnrollAdvice>(this, UnrollFactor);
 }
+
+#else // defined(LLVM_HAVE_TFLITE)
+
+std::unique_ptr<UnrollAdvisor>
+llvm::getReleaseModeUnrollAdvisor(LLVMContext &Ctx) {
+  llvm_unreachable("Requires LLVM to be compiled with TFLite.");
+}
+
+#endif // defined(LLVM_HAVE_TFLITE)

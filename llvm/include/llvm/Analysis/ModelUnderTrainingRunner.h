@@ -51,17 +51,18 @@ public:
     return R->getKind() == MLModelRunner::Kind::Development;
   }
 
-  static std::unique_ptr<ModelUnderTrainingRunner>
-  createAndEnsureValid(LLVMContext &Ctx, const std::string &ModelPath,
-                       StringRef DecisionName,
-                       const std::vector<TensorSpec> &InputSpecs,
-                       StringRef OutputSpecsPathOverride = "");
+  static std::unique_ptr<ModelUnderTrainingRunner> createAndEnsureValid(
+      LLVMContext &Ctx, const std::string &ModelPath, StringRef DecisionName,
+      const std::vector<TensorSpec> &InputSpecs,
+      StringRef OutputSpecsPathOverride = "", const char *Tags = "serve",
+      const char *InputPrefix = "");
 
   ModelUnderTrainingRunner(
       LLVMContext &Ctx, const std::string &ModelPath,
       const std::vector<TensorSpec> &InputSpecs,
       const std::vector<TensorSpec> &OutputSpecs,
-      const std::vector<TensorSpec> &ExtraOutputsForLogging = {});
+      const std::vector<TensorSpec> &ExtraOutputsForLogging = {},
+      const char *Tags = "serve", const char *InputPrefix = "");
 
   bool isValid() const { return !!Evaluator; }
 

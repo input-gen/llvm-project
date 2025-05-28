@@ -94,11 +94,12 @@ ModelUnderTrainingRunner::ModelUnderTrainingRunner(
     LLVMContext &Ctx, const std::string &ModelPath,
     const std::vector<TensorSpec> &InputSpecs,
     const std::vector<TensorSpec> &OutputSpecs,
-    const std::vector<TensorSpec> &ExtraOutputsForLogging)
+    const std::vector<TensorSpec> &ExtraOutputsForLogging, const char *Tags,
+    const char *InputPrefix)
     : MLModelRunner(Ctx, MLModelRunner::Kind::Development, InputSpecs.size()),
       OutputSpecs(OutputSpecs), ExtraOutputsForLogging(ExtraOutputsForLogging) {
-  Evaluator =
-      std::make_unique<TFModelEvaluator>(ModelPath, InputSpecs, OutputSpecs);
+  Evaluator = std::make_unique<TFModelEvaluator>(
+      ModelPath, InputSpecs, OutputSpecs, Tags, InputPrefix);
   if (!Evaluator || !Evaluator->isValid()) {
     Ctx.emitError("Failed to create saved model evaluator");
     Evaluator.reset();
@@ -123,7 +124,8 @@ std::unique_ptr<ModelUnderTrainingRunner>
 ModelUnderTrainingRunner::createAndEnsureValid(
     LLVMContext &Ctx, const std::string &ModelPath, StringRef DecisionName,
     const std::vector<TensorSpec> &InputSpecs,
-    StringRef OutputSpecsPathOverride) {
+    StringRef OutputSpecsPathOverride, const char *Tags,
+    const char *InputPrefix) {
   if (auto MaybeOutputSpecs = loadOutputSpecs(Ctx, DecisionName, ModelPath,
                                               OutputSpecsPathOverride)) {
     std::unique_ptr<ModelUnderTrainingRunner> MUTR;
@@ -142,8 +144,9 @@ ModelUnderTrainingRunner::createAndEnsureValid(
                                                LFS.Spec);
                            }));
 
-    MUTR.reset(new ModelUnderTrainingRunner(
-        Ctx, ModelPath, InputSpecs, OutputSpecs, ExtraOutputsForLogging));
+    MUTR.reset(new ModelUnderTrainingRunner(Ctx, ModelPath, InputSpecs,
+                                            OutputSpecs, ExtraOutputsForLogging,
+                                            Tags, InputPrefix));
     if (MUTR && MUTR->isValid())
       return MUTR;
 

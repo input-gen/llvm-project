@@ -111,6 +111,7 @@ for.inc:                                          ; preds = %for.body4, %if.end
                         EXPECT_EQ(LPI.StoreInstCount, 0u);
                         EXPECT_EQ(LPI.LogicalInstCount, 1u);
                         EXPECT_EQ(LPI.ExpensiveCastInstCount, 0u);
+                        EXPECT_EQ(LPI.IsStepConstant, true);
                       }
                       if (BB.getName() == "for.body4") {
                         Loop *L = LI.getLoopFor(&BB);
@@ -134,6 +135,135 @@ for.inc:                                          ; preds = %for.body4, %if.end
                         EXPECT_EQ(LPI.StoreInstCount, 0u);
                         EXPECT_EQ(LPI.LogicalInstCount, 1u);
                         EXPECT_EQ(LPI.ExpensiveCastInstCount, 0u);
+                        EXPECT_EQ(LPI.IsStepConstant, true);
+                      }
+                    }
+                  });
+}
+
+TEST(LoopPropertiesAnalysisTest, LoopBounds) {
+  const char *ModuleStr = R"IR(
+declare i1 @cond()
+
+define i32 @foo() {
+entry:
+  br label %for.body
+
+for.cond.cleanup:                                 ; preds = %for.cond.cleanup3
+  ret i32 0
+
+for.body:                                         ; preds = %entry, %for.cond.cleanup3
+  %i = phi i32 [ 1, %entry ], [ %inc, %for.body ]
+  %inc = add nuw nsw i32 %i, 1
+  %cond = icmp eq i32 %inc, 8
+  br i1 %cond, label %for.cond.cleanup, label %for.body
+}
+)IR";
+
+  LLVMContext Context;
+  std::unique_ptr<Module> M = makeLLVMModule(Context, ModuleStr);
+  EXPECT_NE(M.get(), nullptr);
+
+  runWithLoopInfo(*M, "foo",
+                  [&](Function &F, LoopInfo &LI, ScalarEvolution &SE,
+                      TargetTransformInfo &TTI, TargetLibraryInfo TLI,
+                      AAResults &AA, DominatorTree &DT, AssumptionCache &AC) {
+                    for (BasicBlock &BB : F) {
+                      if (BB.getName() == "for.body") {
+                        Loop *L = LI.getLoopFor(&BB);
+                        LoopPropertiesInfo LPI = LoopPropertiesInfo::get(
+                            *L, LI, SE, &TTI, &TLI, &AA, &DT, &AC);
+                        EXPECT_EQ(LPI.IsStepConstant, true);
+                        EXPECT_EQ(LPI.IsFinalValueConstant, true);
+                        EXPECT_EQ(LPI.BoundsAreSimple, true);
+                        EXPECT_EQ(LPI.IsFinalValueConstant, true);
+                      }
+                    }
+                  });
+}
+
+TEST(LoopPropertiesAnalysisTest, LoopBounds2) {
+  const char *ModuleStr = R"IR(
+declare i1 @cond()
+
+define i32 @foo() {
+entry:
+  br label %for.body
+
+for.cond.cleanup:                                 ; preds = %for.cond.cleanup3
+  ret i32 0
+
+for.body:                                         ; preds = %entry, %for.cond.cleanup3
+  %i = phi i32 [ 1, %entry ], [ %inc, %for.body ]
+  %inc = add nuw nsw i32 %i, 1
+  %cond = call i1 @cond()
+  br i1 %cond, label %for.cond.cleanup, label %for.body
+}
+)IR";
+
+  LLVMContext Context;
+  std::unique_ptr<Module> M = makeLLVMModule(Context, ModuleStr);
+  EXPECT_NE(M.get(), nullptr);
+
+  runWithLoopInfo(*M, "foo",
+                  [&](Function &F, LoopInfo &LI, ScalarEvolution &SE,
+                      TargetTransformInfo &TTI, TargetLibraryInfo TLI,
+                      AAResults &AA, DominatorTree &DT, AssumptionCache &AC) {
+                    for (BasicBlock &BB : F) {
+                      if (BB.getName() == "for.body") {
+                        Loop *L = LI.getLoopFor(&BB);
+                        LoopPropertiesInfo LPI = LoopPropertiesInfo::get(
+                            *L, LI, SE, &TTI, &TLI, &AA, &DT, &AC);
+                        EXPECT_EQ(LPI.IsStepConstant, false);
+                        EXPECT_EQ(LPI.IsFinalValueConstant, false);
+                        EXPECT_EQ(LPI.BoundsAreSimple, false);
+                        EXPECT_EQ(LPI.IsFinalValueConstant, false);
+                      }
+                    }
+                  });
+}
+
+TEST(LoopPropertiesAnalysisTest, LoopBounds3) {
+  const char *ModuleStr = R"IR(
+declare i32 @step()
+declare i32 @init()
+declare i32 @end()
+
+define i32 @foo() {
+entry:
+  %init = call i32 @init()
+  %end = call i32 @end()
+  %step = call i32 @step()
+  br label %for.body
+
+for.cond.cleanup:                                 ; preds = %for.cond.cleanup3
+  ret i32 0
+
+for.body:                                         ; preds = %entry, %for.cond.cleanup3
+  %i = phi i32 [ %init, %entry ], [ %inc, %for.body ]
+  %inc = add nuw nsw i32 %i, %step
+  %cond = icmp eq i32 %inc, %end
+  br i1 %cond, label %for.cond.cleanup, label %for.body
+}
+)IR";
+
+  LLVMContext Context;
+  std::unique_ptr<Module> M = makeLLVMModule(Context, ModuleStr);
+  EXPECT_NE(M.get(), nullptr);
+
+  runWithLoopInfo(*M, "foo",
+                  [&](Function &F, LoopInfo &LI, ScalarEvolution &SE,
+                      TargetTransformInfo &TTI, TargetLibraryInfo TLI,
+                      AAResults &AA, DominatorTree &DT, AssumptionCache &AC) {
+                    for (BasicBlock &BB : F) {
+                      if (BB.getName() == "for.body") {
+                        Loop *L = LI.getLoopFor(&BB);
+                        LoopPropertiesInfo LPI = LoopPropertiesInfo::get(
+                            *L, LI, SE, &TTI, &TLI, &AA, &DT, &AC);
+                        EXPECT_EQ(LPI.IsStepConstant, false);
+                        EXPECT_EQ(LPI.IsFinalValueConstant, false);
+                        EXPECT_EQ(LPI.BoundsAreSimple, true);
+                        EXPECT_EQ(LPI.IsFinalValueConstant, false);
                       }
                     }
                   });

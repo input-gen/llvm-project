@@ -77,18 +77,19 @@ public:
   }
 
   void logHeuristic(std::optional<unsigned> UnrollFactor) {
-    uint64_t ToLog;
-    if (UnrollFactor)
+    int64_t ToLog;
+    if (UnrollFactor) {
       ToLog = *UnrollFactor;
-    else
-      ToLog = 0;
-    LLVM_DEBUG(DBGS() << "Logging  " << ToLog << "\n");
-    Log->logCustom<uint64_t>("heuristic", ToLog);
+    } else {
+      ToLog = -1;
+    }
+    LLVM_DEBUG(DBGS() << "Logging factor " << ToLog << "\n");
+    Log->logCustom<int64_t>("heuristic", ToLog);
     Log->flush();
   }
 
-  void logAction(bool Unrolled) {
-    LLVM_DEBUG(DBGS() << "Logging action " << Unrolled << "\n");
+  void logAction(uint8_t Unrolled) {
+    LLVM_DEBUG(DBGS() << "Logging action " << (int)Unrolled << "\n");
     Log->logCustom<uint8_t>("action", Unrolled);
     Log->flush();
   }
@@ -162,12 +163,13 @@ public:
             InteractiveChannelBaseName + ".in")) {}
   ~DevelopmentUnrollAdvisor() {}
 
-  UnrollAdvice::InstrumentationInfo onAction() {
-    getModelRunner()->logAction(true);
+  UnrollAdvice::InstrumentationInfo onAction(const LoopUnrollResult &Result) {
+    assert((int)Result > 0);
+    getModelRunner()->logAction(static_cast<uint8_t>(Result));
     return getModelRunner()->getInstrumentation();
   }
   UnrollAdvice::InstrumentationInfo onNoAction() {
-    getModelRunner()->logAction(false);
+    getModelRunner()->logAction(0);
     return getModelRunner()->getInstrumentation();
   }
 
@@ -184,11 +186,14 @@ public:
   using UnrollAdvice::UnrollAdvice;
   UnrollAdvice::InstrumentationInfo
   recordUnrollingImpl(const LoopUnrollResult &Result) override {
+    assert(Result != LoopUnrollResult::Unmodified);
     LLVM_DEBUG(DBGS() << "unrolled\n");
-    return getAdvisor()->onAction();
+    return getAdvisor()->onAction(Result);
   }
   UnrollAdvice::InstrumentationInfo
   recordUnsuccessfulUnrollingImpl(const LoopUnrollResult &Result) override {
+    assert(Result == LoopUnrollResult::Unmodified);
+    assert((int)Result == 0);
     LLVM_DEBUG(DBGS() << "unsuccessful unroll\n");
     return getAdvisor()->onNoAction();
   }
@@ -205,8 +210,6 @@ private:
 
 std::unique_ptr<UnrollAdvice>
 DevelopmentUnrollAdvisor::getAdviceImpl(UnrollAdviceInfo UAI) {
-  // TODO need to pass the rest of the params, see if we can get them in the
-  // unroll pass
   LoopPropertiesInfo LPI = LoopPropertiesInfo::get(
       UAI.L, UAI.LI, UAI.SE, UAI.TTI, UAI.TLI, UAI.AA, UAI.DT, UAI.AC);
 
@@ -337,22 +340,40 @@ DevelopmentUnrollAdvisor::getAdviceImpl(UnrollAdviceInfo UAI) {
     LLVM_DEBUG(DBGS() << "default heuristic says no unrolling\n");
 
   UnrollDecisionTy UD = ModelRunner->getOutput<UnrollDecisionTy>();
-  // The model gives us a speedup estimate for each unroll factor in
-  // [2,MaxUnrollFactor] whose indices are offset by UnrollFactorOffset.
-  float *MaxEl = std::max_element(UD.Out, UD.Out + UnrollModelOutputLength);
 
-  // Only unroll if the biggest estimated speedup is greater than 1.0.
   std::optional<unsigned> UnrollFactor;
-  if (*MaxEl > 1.0) {
-    unsigned ArgMax = std::distance(UD.Out, MaxEl);
-    UnrollFactor = ArgMax + UnrollFactorOffset;
-    LLVM_DEBUG(DBGS() << "got advice factor " << *UnrollFactor << "\n");
+
+  auto IsMinusOne = [](float F) { return -0.99 >= F && F >= -1.01; };
+  // Handle some special cases useful for training and evaluation.
+  if (llvm::all_of(
+          llvm::make_range(UD.Out, UD.Out + UnrollModelOutputLength - 1),
+          IsMinusOne)) {
+    float Last = UD.Out[UnrollModelOutputLength - 1];
+    if (IsMinusOne(Last)) {
+      LLVM_DEBUG(DBGS() << "got advice 'no decision'\n");
+      UnrollFactor = std::nullopt;
+    } else {
+      long long LargeFactor = std::llround(Last);
+      assert(LargeFactor > MaxUnrollFactor);
+      UnrollFactor = LargeFactor;
+      LLVM_DEBUG(DBGS() << "got large advice factor " << *UnrollFactor << "\n");
+    }
   } else {
-    // Returning std::nullopt means that we made no decision, i.e. we delegated
-    // the decision to later handlers. Thus, we need to return 0 meaning "we
-    // decided we should not unroll".
-    UnrollFactor = 0;
-    LLVM_DEBUG(DBGS() << "got advice nounroll\n");
+    // The model gives us a speedup estimate for each unroll factor in
+    // [0,MaxUnrollFactor] whose indices are offset by UnrollFactorOffset.
+    float *MaxEl = std::max_element(UD.Out, UD.Out + UnrollModelOutputLength);
+
+    // Only unroll if the biggest estimated speedup is greater than 1.0.
+    if (*MaxEl > 1.0) {
+      unsigned ArgMax = std::distance(UD.Out, MaxEl);
+      UnrollFactor = ArgMax + UnrollFactorOffset;
+      LLVM_DEBUG(DBGS() << "got advice factor " << *UnrollFactor << "\n");
+    } else {
+      // Returning std::nullopt means that we made no decision, whereas we want
+      // to say "we decided not to unroll", which is 0.
+      UnrollFactor = 0;
+      LLVM_DEBUG(DBGS() << "got advice nounroll\n");
+    }
   }
 
   return std::make_unique<DevelopmentUnrollAdvice>(this, UnrollFactor);

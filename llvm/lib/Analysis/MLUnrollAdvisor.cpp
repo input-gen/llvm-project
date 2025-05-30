@@ -176,6 +176,10 @@ MLUnrollAdvisor::getAdviceImpl(UnrollAdviceInfo UAI) {
     LLVM_DEBUG(DBGS() << "got advice nounroll\n");
   }
 
+  // TODO check if we did not accidentally unroll with a factor greater thatn
+  // the number of iterations. We should fix that here. (but not in the
+  // development mode one because we want the model to learn that it is bad)
+
   return std::make_unique<UnrollAdvice>(this, UnrollFactor);
 }
 

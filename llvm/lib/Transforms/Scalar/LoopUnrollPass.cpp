@@ -925,10 +925,13 @@ bool llvm::computeUnrollCount(Loop *L, const TargetTransformInfo &TTI,
   if (TripCount)
     UP.Partial |= ExplicitUnroll;
 
+  auto UnrollFactorAdvice = Advice.getRecommendedUnrollFactor();
   // 6th priority is partial unrolling.
   // Try partial unroll only when TripCount could be statically calculated.
-  if (auto UnrollFactor = Advice.getRecommendedUnrollFactor()) {
-    UP.Count = *UnrollFactor;
+  if (TripCount != 0) {
+    assert(UnrollFactorAdvice && "All unroll advisors must be able to "
+                                 "advise for const trip count loops");
+    UP.Count = *UnrollFactorAdvice;
 
     if ((PragmaFullUnroll || PragmaEnableUnroll) && TripCount &&
         UP.Count != TripCount)
@@ -967,6 +970,13 @@ bool llvm::computeUnrollCount(Loop *L, const TargetTransformInfo &TTI,
                 "pragma "
                 "because loop has a runtime trip count.";
     });
+
+  if (UnrollFactorAdvice && !(!UP.AllowRemainder && *UnrollFactorAdvice != 0 &&
+                              (TripMultiple % UP.Count) != 0)) {
+    UP.Runtime = true;
+    UP.Count = *UnrollFactorAdvice;
+    return false;
+  }
 
   // 7th priority is runtime unrolling.
   // Don't unroll a runtime trip count loop when it is disabled.

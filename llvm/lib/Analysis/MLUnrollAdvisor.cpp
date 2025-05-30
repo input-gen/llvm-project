@@ -21,7 +21,7 @@ llvm::getReleaseModeUnrollAdvisor(LLVMContext &Ctx) {
     return nullptr;
   std::unique_ptr<MLModelRunner> AOTRunner;
   AOTRunner = ModelUnderTrainingRunner::createAndEnsureValid(
-      Ctx, ModelPathEnv, UnrollDecisionName, UnrollFeatureMap, "serve",
+      Ctx, ModelPathEnv, UnrollDecisionName, UnrollFeatureMap, "", "serve",
       "serving_default_");
   return std::make_unique<MLUnrollAdvisor>(Ctx, std::move(AOTRunner));
 }

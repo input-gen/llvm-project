@@ -185,7 +185,7 @@ MLUnrollAdvisor::getAdviceImpl(UnrollAdviceInfo UAI) {
 
 #else // defined(LLVM_HAVE_TFLITE)
 
-std::unique_ptr<UnrollAdvisor>
+std::unique_ptr<llvm::UnrollAdvisor>
 llvm::getReleaseModeUnrollAdvisor(LLVMContext &Ctx) {
   llvm_unreachable("Requires LLVM to be compiled with TFLite.");
 }

@@ -1125,9 +1125,11 @@ PreservedAnalyses InstrumentorPass::run(Module &M, ModuleAnalysisManager &MAM) {
   if (!Changed)
     return PreservedAnalyses::all();
 
+#ifndef NDEBUG
   if (verifyModule(M))
     M.dump();
   assert(!verifyModule(M, &errs()));
+#endif
 
   return PreservedAnalyses::none();
 }
@@ -1216,7 +1218,9 @@ InstrumentationConfig::getBasePointerInfo(Value &V,
       IIRB.IRB.SetInsertPointPastAllocas(
           IIRB.IRB.GetInsertBlock()->getParent());
     else {
+#ifndef NDEBUG
       VPtr->dump();
+#endif
       llvm_unreachable("Unexpected base pointer!");
     }
     ensureDbgLoc(IIRB.IRB);

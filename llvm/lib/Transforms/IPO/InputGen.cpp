@@ -1379,9 +1379,11 @@ InputGenInstrumentEntriesPass::run(Module &M, AnalysisManager<Module> &MAM) {
   if (!Changed)
     return PreservedAnalyses::all();
 
+#ifndef NDEBUG
   if (verifyModule(M))
     M.dump();
   assert(!verifyModule(M, &errs()));
+#endif
 
   return PreservedAnalyses::none();
 }
@@ -1395,9 +1397,11 @@ InputGenInstrumentMemoryPass::run(Module &M, AnalysisManager<Module> &MAM) {
   if (!Changed)
     return PreservedAnalyses::all();
 
+#ifndef NDEBUG
   if (verifyModule(M))
     M.dump();
   assert(!verifyModule(M, &errs()));
+#endif
 
   return PreservedAnalyses::none();
 }

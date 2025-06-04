@@ -261,7 +261,9 @@ public:
           CB->setArgOperand(ACI->SizeRHSArgNo, Mul);
         }
       } else {
+#ifndef NDEBUG
         Obj->dump();
+#endif
         llvm_unreachable("TODO");
       }
     }
@@ -532,11 +534,13 @@ struct LightSanInstrumentationConfig : public InstrumentationConfig {
 
     for (auto [I, OpNo] : ReplStack) {
       auto *NewOp = V2M.lookup({I->getOperand(OpNo), Fn});
+#ifndef NDEBUG
       if (!NewOp) {
         I->dump();
         I->getOperand(OpNo)->dump();
       }
       assert(NewOp);
+#endif
       I->setOperand(OpNo, NewOp);
     }
 
@@ -547,9 +551,11 @@ struct LightSanInstrumentationConfig : public InstrumentationConfig {
       IIRB.hoistInstructionsAndAdjustIP(*I, BestIP, DT);
 
     auto *MPtr = V2M.lookup({&VPtr, Fn});
+#ifndef NDEBUG
     if (!MPtr)
       VPtr.dump();
     assert(MPtr);
+#endif
     return MPtr;
   }
 
@@ -3312,10 +3318,11 @@ PreservedAnalyses run(Module &M, AnalysisManager<Module> &MAM) {
   for (auto *Fn : DeadFns)
     Fn->eraseFromParent();
 
+#ifndef NDEBUG
   if (verifyModule(M))
     M.dump();
-
   assert(!verifyModule(M, &errs()));
+#endif
 
 #if 1
   ModulePassManager MPM;

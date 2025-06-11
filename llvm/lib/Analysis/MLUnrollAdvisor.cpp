@@ -33,14 +33,6 @@ MLUnrollAdvisor::getAdviceImpl(UnrollAdviceInfo UAI) {
   LoopPropertiesInfo LPI = LoopPropertiesInfo::get(
       UAI.L, UAI.LI, UAI.SE, UAI.TTI, UAI.TLI, UAI.AA, UAI.DT, UAI.AC);
 
-#define CLIP(VAL, BOUND) VAL = VAL > BOUND ? BOUND : VAL
-  CLIP(UAI.TripCount, 257);
-  CLIP(LPI.MaxSaveVectorWidthInBits, 257);
-  CLIP(LPI.MaxPHIChainRecipThroughput, 300);
-#undef CLIP
-  if (LPI.LoopBackEdgeCount.ugt(257))
-    LPI.LoopBackEdgeCount = 257;
-
 #define SET(NAME, val)                                                         \
   *ModelRunner->getTensor<int64_t>(UnrollFeatureIndex::NAME) =                 \
       static_cast<int64_t>(val);

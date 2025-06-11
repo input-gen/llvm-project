@@ -28,8 +28,6 @@ llvm::getReleaseModeUnrollAdvisor(LLVMContext &Ctx) {
 
 std::unique_ptr<UnrollAdvice>
 MLUnrollAdvisor::getAdviceImpl(UnrollAdviceInfo UAI) {
-  // TODO need to pass the rest of the params, see if we can get them in the
-  // unroll pass
   LoopPropertiesInfo LPI = LoopPropertiesInfo::get(
       UAI.L, UAI.LI, UAI.SE, UAI.TTI, UAI.TLI, UAI.AA, UAI.DT, UAI.AC);
 

@@ -973,7 +973,7 @@ bool llvm::computeUnrollCount(Loop *L, const TargetTransformInfo &TTI,
     });
 
   if (UnrollFactorAdvice && !(!UP.AllowRemainder && *UnrollFactorAdvice != 0 &&
-                              (TripMultiple % UP.Count) != 0)) {
+                              (TripMultiple % *UnrollFactorAdvice) != 0)) {
     UP.Runtime = true;
     UP.Count = *UnrollFactorAdvice;
     return false;

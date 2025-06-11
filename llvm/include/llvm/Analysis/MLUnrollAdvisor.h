@@ -13,6 +13,7 @@
 #include "llvm/Analysis/LazyCallGraph.h"
 #include "llvm/Analysis/MLModelRunner.h"
 #include "llvm/Analysis/UnrollAdvisor.h"
+#include "llvm/Config/llvm-config.h"
 #include "llvm/IR/PassManager.h"
 
 #include <map>

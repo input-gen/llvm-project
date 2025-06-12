@@ -1,46 +1,61 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cstdint>
+#include <cstring>
+#include <fstream>
+#include <iostream>
+#include <optional>
 #include <sys/mman.h>
 #include <unistd.h>
+#include <vector>
 
-int main(int argc, char **argv) {
-  if (argc <= 1) {
-    printf("not enough args\n");
-    return 1;
-  }
-  const char *infile = argv[1];
-  FILE *f = fopen(infile, "rb");
-  if (!f) {
-    perror("fopen");
-    return 1;
-  }
+constexpr static int fixed_flag = MAP_FIXED_NOREPLACE;
+// static int fixed_flag = MAP_FIXED;
 
-  while (1) {
-    unsigned long start;
+std::optional<void *> restore_memory(const std::string &in_file) {
+  std::ifstream in(in_file, std::ios::binary);
+  if (!in)
+    return {};
+
+  void *Args;
+  in.read(reinterpret_cast<char *>(&Args), sizeof(Args));
+
+  while (in.peek() != EOF) {
+    uintptr_t start;
     size_t size;
 
-    if (fread(&start, sizeof(start), 1, f) != 1)
-      break;
-    if (fread(&size, sizeof(size), 1, f) != 1)
-      break;
+    in.read(reinterpret_cast<char *>(&start), sizeof(start));
+    in.read(reinterpret_cast<char *>(&size), sizeof(size));
 
-    void *mapped = mmap((void *)start, size, PROT_READ | PROT_WRITE | PROT_EXEC,
-                        MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
-    if (mapped == MAP_FAILED) {
+    std::vector<char> buffer(size);
+    in.read(buffer.data(), size);
+
+    void *addr = mmap(reinterpret_cast<void *>(start), size,
+                      PROT_READ | PROT_WRITE | PROT_EXEC,
+                      MAP_PRIVATE | MAP_ANONYMOUS | fixed_flag, -1, 0);
+
+    if (addr == MAP_FAILED) {
       perror("mmap");
-      return 1;
+      return {};
     }
 
-    if (fread(mapped, 1, size, f) != size) {
-      perror("fread data");
-      return 1;
-    }
+    std::memcpy(addr, buffer.data(), size);
   }
 
-  fclose(f);
+  return Args;
+}
 
-  printf("Memory restored. Press Enter to continue...\n");
-  getchar();
+int main(int argc, char *argv[]) {
+  std::string input = "/home/ivan/tmp/inputgen_record_outfile";
+
+  auto res = restore_memory(input);
+  if (!res) {
+    std::cerr << "Memory restore failed.\n";
+    return 1;
+  }
+
+  std::cout << "Memory successfully restored from " << input << "\n";
+  std::cout << "Args: " << *res << "\n";
+  std::cout << "Press Enter to continue...\n";
+  std::cin.get();
+
   return 0;
 }

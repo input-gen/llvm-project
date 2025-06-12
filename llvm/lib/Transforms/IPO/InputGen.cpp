@@ -51,6 +51,7 @@
 #include "llvm/IR/Verifier.h"
 #include "llvm/Support/Allocator.h"
 #include "llvm/Support/Casting.h"
+#include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/GenericDomTree.h"
 #include "llvm/Support/Regex.h"
 #include "llvm/Support/StringSaver.h"
@@ -269,6 +270,7 @@ struct InputGenEntriesImpl {
 
 private:
   bool createEntryPoint();
+  bool createRecordingHooks();
   bool processFunctions();
   bool processOtherFunctions();
   void collectIndirectCalleeCandidates();
@@ -1069,8 +1071,7 @@ bool InputGenMemoryImpl::instrument() {
 }
 
 bool InputGenEntriesImpl::instrument() {
-  if (Mode == IGIMode::Generate || Mode == IGIMode::ReplayGenerated ||
-      Mode == IGIMode::ReplayRecorded) {
+  if (Mode != IGIMode::Disabled) {
     bool Changed = false;
 
     for (auto &Fn : M.functions()) {
@@ -1083,12 +1084,18 @@ bool InputGenEntriesImpl::instrument() {
       }
     }
 
-    Changed |= createEntryPoint();
-    Changed |= processFunctions();
+    if (Mode == IGIMode::Generate || Mode == IGIMode::ReplayGenerated ||
+        Mode == IGIMode::ReplayRecorded) {
+      Changed |= createEntryPoint();
+      Changed |= processFunctions();
+    } else if (Mode == IGIMode::Record) {
+      Changed |= createRecordingHooks();
+    } else {
+      llvm_unreachable("??");
+    }
 
     return Changed;
   }
-
   return false;
 }
 
@@ -1149,6 +1156,64 @@ bool InputGenEntriesImpl::processFunctions() {
   for (Function &F : M)
     F.removeFnAttr(Attribute::InputGenEntry);
 
+  return true;
+}
+
+bool InputGenEntriesImpl::createRecordingHooks() {
+  auto &Ctx = M.getContext();
+
+  FunctionCallee RecordPush = M.getOrInsertFunction(
+      std::string(InputGenRuntimePrefix) + "record_push", Type::getVoidTy(Ctx),
+      PointerType::get(Ctx, 0), PointerType::get(Ctx, 0));
+  FunctionCallee RecordPop =
+      M.getOrInsertFunction(std::string(InputGenRuntimePrefix) + "record_pop",
+                            Type::getVoidTy(Ctx), PointerType::get(Ctx, 0));
+
+  uint32_t NumEntryPoints = EntryFunctions.size();
+
+  for (uint32_t I = 0; I < NumEntryPoints; ++I) {
+    Function *EntryPoint = EntryFunctions[I];
+    StringRef OriginalName = EntryPoint->getName();
+    std::string SubFuncName =
+        std::string(InputGenRuntimePrefix) + "entry_" + OriginalName.str();
+
+    Function *IGEntry =
+        Function::Create(EntryPoint->getFunctionType(),
+                         EntryPoint->getLinkage(), OriginalName, M);
+    IGEntry->setVisibility(EntryPoint->getVisibility());
+    EntryPoint->replaceAllUsesWith(IGEntry);
+    EntryPoint->setName(SubFuncName);
+
+    BasicBlock *EntryBB = BasicBlock::Create(Ctx, "entry", IGEntry);
+    IRBuilder<> IRB(Ctx);
+    IRB.SetInsertPoint(EntryBB);
+
+    unsigned ArgsMemSize = 0;
+    for (auto &Arg : IGEntry->args())
+      ArgsMemSize += DL.getTypeStoreSize(Arg.getType());
+    Value *ArgsMem =
+        IRB.CreateAlloca(IRB.getInt8Ty(), IRB.getInt32(ArgsMemSize));
+    SmallVector<Value *> Args;
+    for (auto &Arg : IGEntry->args()) {
+      Args.push_back(&Arg);
+      IRB.CreateStore(&Arg, ArgsMem);
+      ArgsMem = IRB.CreateConstGEP1_32(IRB.getInt8Ty(), ArgsMem,
+                                       DL.getTypeStoreSize(Arg.getType()));
+    }
+
+    Value *FuncNameVal = IRB.CreateGlobalString(
+        EntryPoint->getName(), std::string(InputGenRuntimePrefix) +
+                                   "ig_record_entry_name." +
+                                   EntryPoint->getName());
+    IRB.CreateCall(RecordPush, {FuncNameVal, ArgsMem});
+    CallInst *Call = IRB.CreateCall(FunctionCallee(EntryPoint), Args);
+    IRB.CreateCall(RecordPop, {FuncNameVal});
+
+    if (Call->getType()->isVoidTy())
+      IRB.CreateRetVoid();
+    else
+      IRB.CreateRet(Call);
+  }
   return true;
 }
 

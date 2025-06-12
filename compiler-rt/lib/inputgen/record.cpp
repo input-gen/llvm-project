@@ -12,10 +12,13 @@
 
 #include <cassert>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <map>
 #include <sstream>
 #include <stdio.h>
 #include <stdlib.h>
@@ -31,48 +34,53 @@
 
 using namespace __ig;
 
+static constexpr char InputGenRecordPathEnvVar[] = "INPUTGEN_RECORD_DUMP_PATH";
+static constexpr char InputGenRecordDumpFirstNVar[] =
+    "INPUTGEN_RECORD_DUMP_FIRST_N";
+extern "C" const char __ig_input_dump_path __attribute__((weak));
+
 namespace __ig::storage {
 
 struct MemRegion {
-  uintptr_t start;
-  uintptr_t end;
-  std::string perms;
+  uintptr_t Start;
+  uintptr_t End;
+  std::string Perms;
 };
 
-std::vector<MemRegion> parse_maps(pid_t pid) {
-  std::vector<MemRegion> regions;
-  std::ifstream maps("/proc/" + std::to_string(pid) + "/maps");
-  std::string line;
+std::vector<MemRegion> parse_maps(pid_t Pid) {
+  std::vector<MemRegion> Regions;
+  std::ifstream Maps("/proc/" + std::to_string(Pid) + "/maps");
+  std::string Line;
 
-  while (std::getline(maps, line)) {
-    std::istringstream iss(line);
-    std::string addr_range, perms;
-    if (!(iss >> addr_range >> perms))
+  while (std::getline(Maps, Line)) {
+    std::istringstream iss(Line);
+    std::string AddrRange, Perms;
+    if (!(iss >> AddrRange >> Perms))
       continue;
 
-    auto dash = addr_range.find('-');
-    uintptr_t start = std::stoul(addr_range.substr(0, dash), nullptr, 16);
-    uintptr_t end = std::stoul(addr_range.substr(dash + 1), nullptr, 16);
+    auto dash = AddrRange.find('-');
+    uintptr_t Start = std::stoul(AddrRange.substr(0, dash), nullptr, 16);
+    uintptr_t End = std::stoul(AddrRange.substr(dash + 1), nullptr, 16);
 
-    if (perms[0] == 'r') {
-      regions.push_back({start, end, perms});
+    if (Perms[0] == 'r') {
+      Regions.push_back({Start, End, Perms});
     }
   }
 
-  return regions;
+  return Regions;
 }
 
-size_t read_all(std::ifstream &mem_stream, uintptr_t addr, char *buffer,
-                size_t size) {
-  mem_stream.clear(); // Clear any error flags (EOF, failbit, etc.)
-  mem_stream.seekg(addr, std::ios::beg);
-  if (!mem_stream.good())
+size_t read_all(std::ifstream &MemStream, uintptr_t Addr, char *Buffer,
+                size_t Size) {
+  MemStream.clear(); // Clear any error flags (EOF, failbit, etc.)
+  MemStream.seekg(Addr, std::ios::beg);
+  if (!MemStream.good())
     return false;
 
   size_t total = 0;
-  while (total < size) {
-    mem_stream.read(buffer + total, size - total);
-    std::streamsize bytes_read = mem_stream.gcount();
+  while (total < Size) {
+    MemStream.read(Buffer + total, Size - total);
+    std::streamsize bytes_read = MemStream.gcount();
     if (bytes_read <= 0)
       break;
     total += bytes_read;
@@ -81,16 +89,18 @@ size_t read_all(std::ifstream &mem_stream, uintptr_t addr, char *buffer,
   return total;
 }
 
-bool dump_memory(pid_t pid, const std::string &out_file, const char *NameC,
+bool dump_memory(pid_t Pid, const std::string &OutFile, const char *NameC,
                  void *Args) {
-  auto regions = parse_maps(pid);
+  auto Regions = parse_maps(Pid);
   uintptr_t ArgsUint = reinterpret_cast<uintptr_t>(Args);
-  std::ofstream OFS(out_file, std::ios::binary);
-  if (!OFS)
+  std::ofstream OFS(OutFile, std::ios::binary);
+  if (!OFS.is_open()) {
+    std::cerr << "Failed to open file '" << OutFile
+              << "': " << std::strerror(errno) << "\n";
     return false;
+  }
 
   DEFINE_WRITEV(OFS);
-
 
   WRITEV(RecordFileMagic);
 
@@ -101,30 +111,30 @@ bool dump_memory(pid_t pid, const std::string &out_file, const char *NameC,
 
   OFS.write(reinterpret_cast<const char *>(&Args), sizeof(Args));
 
-  std::ifstream mem("/proc/" + std::to_string(pid) + "/mem", std::ios::binary);
+  std::ifstream mem("/proc/" + std::to_string(Pid) + "/mem", std::ios::binary);
   if (!mem) {
     std::cerr << "Failed to open mem file\n";
     return false;
   }
 
   bool FoundArgs = false;
-  for (const auto &region : regions) {
-    size_t size = region.end - region.start;
-    assert(size > 0);
-    std::vector<char> buffer(size);
+  for (const auto &Region : Regions) {
+    size_t Size = Region.End - Region.Start;
+    assert(Size > 0);
+    std::vector<char> Buffer(Size);
 
-    size_t read_bytes = read_all(mem, region.start, buffer.data(), size);
-    if (read_bytes != size) {
+    size_t ReadBytes = read_all(mem, Region.Start, Buffer.data(), Size);
+    if (ReadBytes != Size) {
       std::cerr << "Warning: Partial or failed read at region 0x" << std::hex
-                << region.start << "-0x" << region.end << "\n";
+                << Region.Start << "-0x" << Region.End << "\n";
     }
-    DEBUGF("WRITE IN START 0x%lx SIZE 0x%lx\n", region.start,
-           region.end - region.start);
-    OFS.write(reinterpret_cast<const char *>(&region.start),
-              sizeof(region.start));
-    OFS.write(reinterpret_cast<const char *>(&size), sizeof(size));
-    OFS.write(buffer.data(), size);
-    if (ArgsUint >= region.start && ArgsUint < region.end) {
+    DEBUGF("WRITE IN START 0x%lx SIZE 0x%lx\n", Region.Start,
+           Region.End - Region.Start);
+    OFS.write(reinterpret_cast<const char *>(&Region.Start),
+              sizeof(Region.Start));
+    OFS.write(reinterpret_cast<const char *>(&Size), sizeof(Size));
+    OFS.write(Buffer.data(), Size);
+    if (ArgsUint >= Region.Start && ArgsUint < Region.End) {
       FoundArgs = true;
       DEBUGF("Args found\n");
     }
@@ -139,47 +149,89 @@ bool dump_memory(pid_t pid, const std::string &out_file, const char *NameC,
 }
 } // namespace __ig::storage
 
+static std::map<std::string, int> NumInputs;
+
 IG_API_ATTRS
 void __ig_record_push(const char *Name, void *Args) {
   printf("Starting recording of %s\n", Name);
-  pid_t parent_pid = getpid();
-  const char *outfile = "/home/ivan/tmp/inputgen_record_outfile";
+  pid_t ParentPid = getpid();
 
-  pid_t child = fork();
-  if (child == 0) {
-    if (ptrace(PTRACE_ATTACH, parent_pid, nullptr, nullptr) == -1) {
+  // TODO this can be put in a global constructor
+  static const std::filesystem::path OutFile = [&]() {
+    std::string OutFile;
+    if (char *DumpPathC = getenv(InputGenRecordPathEnvVar)) {
+      OutFile = DumpPathC;
+    } else if (&__ig_input_dump_path != nullptr) {
+      OutFile = &__ig_input_dump_path;
+    } else {
+      std::cerr
+          << "Input dump path not specified under compilation or runtime. "
+             "Please define "
+          << InputGenRecordPathEnvVar << "\n";
+      abort();
+    }
+
+    if (OutFile.empty()) {
+      std::cerr << "Input dump path is empty.\n";
+      abort();
+    }
+
+    std::cerr << "Dumping inputs to " << OutFile << "\n";
+
+    return OutFile;
+  }();
+
+  std::filesystem::path ThisOutDir = OutFile / Name;
+
+  std::error_code EC;
+  if (!std::filesystem::create_directories(ThisOutDir, EC)) {
+    if (EC) {
+      std::cerr << "Failed to create dump directory " << ThisOutDir << ": "
+                << EC.message() << "\n";
+      exit(1);
+    }
+  }
+
+  auto [CurInput, Existing] = NumInputs.insert({Name, 0});
+  std::filesystem::path ThisOutFile =
+      ThisOutDir / ("input-" + std::to_string(CurInput->second) + ".inp");
+  CurInput->second++;
+
+  pid_t ChildPid = fork();
+  if (ChildPid == 0) {
+    if (ptrace(PTRACE_ATTACH, ParentPid, nullptr, nullptr) == -1) {
       perror("ptrace attach");
-      abort();
+      exit(1);
     }
-    waitpid(parent_pid, nullptr, 0);
+    waitpid(ParentPid, nullptr, 0);
 
-    if (!__ig::storage::dump_memory(parent_pid, outfile, Name, Args)) {
+    if (!__ig::storage::dump_memory(ParentPid, ThisOutFile, Name, Args)) {
       std::cerr << "Memory dump failed.\n";
-      abort();
+      exit(1);
     }
 
-    ptrace(PTRACE_DETACH, parent_pid, nullptr, nullptr);
-    printf("Memory dump finished (child) to '%s'\n", outfile);
+    ptrace(PTRACE_DETACH, ParentPid, nullptr, nullptr);
+    printf("Memory dump finished (child) to '%s'\n", ThisOutFile.c_str());
     exit(0);
   } else {
-    if (waitpid(child, nullptr, 0) == -1) {
+    int Status = 0;
+    if (waitpid(ChildPid, &Status, 0) == -1) {
       printf("waitpid failed\n");
       exit(1);
     }
-    int status = 0;
-    if (WIFEXITED(status)) {
-      int exit_code = WEXITSTATUS(status);
-      if (exit_code == 0) {
+    if (WIFEXITED(Status)) {
+      int ExitCode = WEXITSTATUS(Status);
+      if (ExitCode == 0) {
         std::cout << "Child exited successfully.\n";
       } else {
-        std::cout << "Child exited with code: " << exit_code << "\n";
+        std::cout << "Child exited with code: " << ExitCode << "\n";
         exit(1);
       }
     } else {
       std::cout << "Child did not exit normally.\n";
       exit(1);
     }
-    printf("Memory dump finished to '%s'.\n", outfile);
+    printf("Memory dump finished to '%s'.\n", ThisOutFile.c_str());
     printf("Will now continue executing %s\n", Name);
   }
 }
@@ -187,5 +239,14 @@ void __ig_record_push(const char *Name, void *Args) {
 IG_API_ATTRS
 void __ig_record_pop(const char *Name, void *Args) {
   printf("Finished execution of %s\n", Name);
-  exit(0);
+  static auto DumpFirstN = [&]() -> std::optional<long long> {
+    if (char *N = getenv(InputGenRecordDumpFirstNVar))
+      return atoll(N) - 1;
+    return std::nullopt;
+  }();
+  if (!DumpFirstN)
+    return;
+  if (*DumpFirstN == 0)
+    exit(0);
+  DumpFirstN = *DumpFirstN - 1;
 }

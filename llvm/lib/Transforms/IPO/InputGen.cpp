@@ -1174,9 +1174,9 @@ bool InputGenEntriesImpl::createRecordingHooks() {
 
   for (uint32_t I = 0; I < NumEntryPoints; ++I) {
     Function *EntryPoint = EntryFunctions[I];
-    StringRef OriginalName = EntryPoint->getName();
+    std::string OriginalName = EntryPoint->getName().str();
     std::string SubFuncName =
-        std::string(InputGenRuntimePrefix) + "entry_" + OriginalName.str();
+        std::string(InputGenRuntimePrefix) + "entry_" + OriginalName;
 
     Function *IGEntry =
         Function::Create(EntryPoint->getFunctionType(),
@@ -1184,6 +1184,7 @@ bool InputGenEntriesImpl::createRecordingHooks() {
     IGEntry->setVisibility(EntryPoint->getVisibility());
     EntryPoint->replaceAllUsesWith(IGEntry);
     EntryPoint->setName(SubFuncName);
+    IGEntry->setName(OriginalName);
 
     BasicBlock *EntryBB = BasicBlock::Create(Ctx, "entry", IGEntry);
     IRBuilder<> IRB(Ctx);
@@ -1191,19 +1192,21 @@ bool InputGenEntriesImpl::createRecordingHooks() {
 
     unsigned ArgsMemSize = 0;
     for (auto &Arg : IGEntry->args())
-      ArgsMemSize += DL.getTypeStoreSize(Arg.getType());
+      ArgsMemSize += DL.getTypeStoreSize(Arg.getType()) * 8;
     Value *ArgsMem =
         IRB.CreateAlloca(IRB.getInt8Ty(), IRB.getInt32(ArgsMemSize));
+    Value *CurArgMem = ArgsMem;
     SmallVector<Value *> Args;
+    auto *PtrTy = PointerType::getUnqual(Ctx);
     for (auto &Arg : IGEntry->args()) {
       Args.push_back(&Arg);
-      IRB.CreateStore(&Arg, ArgsMem);
-      ArgsMem = IRB.CreateConstGEP1_32(IRB.getInt8Ty(), ArgsMem,
+      IRB.CreateStore(&Arg, CurArgMem);
+      CurArgMem = IRB.CreateConstGEP1_32(PtrTy, CurArgMem,
                                        DL.getTypeStoreSize(Arg.getType()));
     }
 
     Value *FuncNameVal = IRB.CreateGlobalString(
-        EntryPoint->getName(), std::string(InputGenRuntimePrefix) +
+        OriginalName, std::string(InputGenRuntimePrefix) +
                                    "ig_record_entry_name." +
                                    EntryPoint->getName());
     IRB.CreateCall(RecordPush, {FuncNameVal, ArgsMem});

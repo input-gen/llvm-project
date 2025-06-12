@@ -10,6 +10,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include <cassert>
 #include <cstdio>
 #include <cstring>
 #include <fcntl.h>
@@ -26,6 +27,11 @@
 #include <vector>
 
 #include "common.h"
+#include "storage_utils.h"
+
+using namespace __ig;
+
+namespace __ig::storage {
 
 struct MemRegion {
   uintptr_t start;
@@ -56,42 +62,86 @@ std::vector<MemRegion> parse_maps(pid_t pid) {
   return regions;
 }
 
-bool dump_memory(pid_t pid, const std::string &out_file, void *Args) {
-  auto regions = parse_maps(pid);
-  std::ofstream out(out_file, std::ios::binary);
-  if (!out)
+size_t read_all(std::ifstream &mem_stream, uintptr_t addr, char *buffer,
+                size_t size) {
+  mem_stream.clear(); // Clear any error flags (EOF, failbit, etc.)
+  mem_stream.seekg(addr, std::ios::beg);
+  if (!mem_stream.good())
     return false;
 
-  out.write(reinterpret_cast<const char *>(&Args), sizeof(Args));
-
-  std::string mem_path = "/proc/" + std::to_string(pid) + "/mem";
-  int mem_fd = open(mem_path.c_str(), O_RDONLY);
-  if (mem_fd < 0)
-    return false;
-
-  for (const auto &region : regions) {
-    size_t size = region.end - region.start;
-    std::vector<char> buffer(size);
-
-    if (lseek(mem_fd, region.start, SEEK_SET) == -1)
-      continue;
-    ssize_t n = read(mem_fd, buffer.data(), size);
-    if (n <= 0)
-      continue;
-
-    out.write(reinterpret_cast<const char *>(&region.start),
-              sizeof(region.start));
-    out.write(reinterpret_cast<const char *>(&size), sizeof(size));
-    out.write(buffer.data(), n);
+  size_t total = 0;
+  while (total < size) {
+    mem_stream.read(buffer + total, size - total);
+    std::streamsize bytes_read = mem_stream.gcount();
+    if (bytes_read <= 0)
+      break;
+    total += bytes_read;
   }
 
-  close(mem_fd);
+  return total;
+}
+
+bool dump_memory(pid_t pid, const std::string &out_file, const char *NameC,
+                 void *Args) {
+  auto regions = parse_maps(pid);
+  uintptr_t ArgsUint = reinterpret_cast<uintptr_t>(Args);
+  std::ofstream OFS(out_file, std::ios::binary);
+  if (!OFS)
+    return false;
+
+  DEFINE_WRITEV(OFS);
+
+
+  WRITEV(RecordFileMagic);
+
+  std::string Name = NameC;
+  uint32_t NameSize = Name.size();
+  WRITEV(NameSize);
+  OFS.write(Name.data(), NameSize);
+
+  OFS.write(reinterpret_cast<const char *>(&Args), sizeof(Args));
+
+  std::ifstream mem("/proc/" + std::to_string(pid) + "/mem", std::ios::binary);
+  if (!mem) {
+    std::cerr << "Failed to open mem file\n";
+    return false;
+  }
+
+  bool FoundArgs = false;
+  for (const auto &region : regions) {
+    size_t size = region.end - region.start;
+    assert(size > 0);
+    std::vector<char> buffer(size);
+
+    size_t read_bytes = read_all(mem, region.start, buffer.data(), size);
+    if (read_bytes != size) {
+      std::cerr << "Warning: Partial or failed read at region 0x" << std::hex
+                << region.start << "-0x" << region.end << "\n";
+    }
+    DEBUGF("WRITE IN START 0x%lx SIZE 0x%lx\n", region.start,
+           region.end - region.start);
+    OFS.write(reinterpret_cast<const char *>(&region.start),
+              sizeof(region.start));
+    OFS.write(reinterpret_cast<const char *>(&size), sizeof(size));
+    OFS.write(buffer.data(), size);
+    if (ArgsUint >= region.start && ArgsUint < region.end) {
+      FoundArgs = true;
+      DEBUGF("Args found\n");
+    }
+  }
+
+  if (!FoundArgs) {
+    puts("Did not find args\n");
+    return false;
+  }
+
   return true;
 }
+} // namespace __ig::storage
 
 IG_API_ATTRS
 void __ig_record_push(const char *Name, void *Args) {
-  printf("PUSH %s\n", Name);
+  printf("Starting recording of %s\n", Name);
   pid_t parent_pid = getpid();
   const char *outfile = "/home/ivan/tmp/inputgen_record_outfile";
 
@@ -103,20 +153,39 @@ void __ig_record_push(const char *Name, void *Args) {
     }
     waitpid(parent_pid, nullptr, 0);
 
-    if (!dump_memory(parent_pid, outfile, Args)) {
+    if (!__ig::storage::dump_memory(parent_pid, outfile, Name, Args)) {
       std::cerr << "Memory dump failed.\n";
       abort();
     }
 
     ptrace(PTRACE_DETACH, parent_pid, nullptr, nullptr);
     printf("Memory dump finished (child) to '%s'\n", outfile);
-    abort();
+    exit(0);
   } else {
-    waitpid(child, nullptr, 0);
+    if (waitpid(child, nullptr, 0) == -1) {
+      printf("waitpid failed\n");
+      exit(1);
+    }
+    int status = 0;
+    if (WIFEXITED(status)) {
+      int exit_code = WEXITSTATUS(status);
+      if (exit_code == 0) {
+        std::cout << "Child exited successfully.\n";
+      } else {
+        std::cout << "Child exited with code: " << exit_code << "\n";
+        exit(1);
+      }
+    } else {
+      std::cout << "Child did not exit normally.\n";
+      exit(1);
+    }
     printf("Memory dump finished to '%s'.\n", outfile);
-    abort();
+    printf("Will now continue executing %s\n", Name);
   }
 }
 
 IG_API_ATTRS
-void __ig_record_pop(const char *Name, void *Args) { printf("POP %s\n", Name); }
+void __ig_record_pop(const char *Name, void *Args) {
+  printf("Finished execution of %s\n", Name);
+  exit(0);
+}

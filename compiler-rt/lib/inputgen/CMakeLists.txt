@@ -68,6 +68,7 @@ add_compiler_rt_runtime(inputgen.replay_recorded
   ARCHS ${INPUTGEN_SUPPORTED_ARCH}
   SOURCES
     replay_recorded.cpp
+    common.cpp
 
   ADDITIONAL_HEADERS ${INPUTGEN_HEADERS}
   CFLAGS ${INPUTGEN_CFLAGS}

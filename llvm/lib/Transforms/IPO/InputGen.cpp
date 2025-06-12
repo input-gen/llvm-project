@@ -29,6 +29,7 @@
 #include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/ValueTracking.h"
+#include "llvm/Bitcode/BitcodeWriter.h"
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/BasicBlock.h"
@@ -49,14 +50,18 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/PassManager.h"
 #include "llvm/IR/Verifier.h"
+#include "llvm/Passes/PassBuilder.h"
 #include "llvm/Support/Allocator.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/FileSystem.h"
 #include "llvm/Support/GenericDomTree.h"
+#include "llvm/Support/Path.h"
 #include "llvm/Support/Regex.h"
 #include "llvm/Support/StringSaver.h"
 #include "llvm/Transforms/IPO/Instrumentor.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
+#include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/Transforms/Utils/CodeMoverUtils.h"
 #include "llvm/Transforms/Utils/ModuleUtils.h"
 #include "llvm/Transforms/Utils/ValueMapper.h"
@@ -103,28 +108,8 @@ static cl::opt<std::string>
 static constexpr char ClGenerateStubs[] = "";
 #endif
 
+static constexpr char InputGenRecordPathEnvVar[] = "INPUTGEN_RECORD_DUMP_PATH";
 static constexpr char InputGenRuntimePrefix[] = "__ig_";
-static constexpr char InputGenRenamePrefix[] = "__renamed_ig_";
-//
-// struct DenseMapInfo<ControlCondition> {
-//  static inline ControlCondition getEmptyKey() {
-//    return DenseMapInfo<void*>::getEmptyKey();
-//  }
-//
-//  static inline T* getTombstoneKey() {
-//    uintptr_t Val = static_cast<uintptr_t>(-2);
-//    Val <<= Log2MaxAlign;
-//    return reinterpret_cast<T*>(Val);
-//  }
-//
-//  static unsigned getHashValue(const T *PtrVal) {
-//    return (unsigned((uintptr_t)PtrVal) >> 4) ^
-//           (unsigned((uintptr_t)PtrVal) >> 9);
-//  }
-//
-//  static bool isEqual(const T *LHS, const T *RHS) { return LHS == RHS; }
-//};
-
 static constexpr char InputGenIndirectCalleeCandidateGlobalName[] =
     "__ig_indirect_callee_candidates";
 
@@ -269,6 +254,7 @@ struct InputGenEntriesImpl {
   bool instrument();
 
 private:
+  void createReplayRecordedModule();
   bool createEntryPoint();
   bool createRecordingHooks();
   bool processFunctions();
@@ -1070,8 +1056,79 @@ bool InputGenMemoryImpl::instrument() {
   return Changed;
 }
 
+void InputGenEntriesImpl::createReplayRecordedModule() {
+  assert(Mode == IGIMode::Record);
+
+  char *DumpPathC = getenv(InputGenRecordPathEnvVar);
+  if (!DumpPathC)
+    return;
+
+  if (auto EC = sys::fs::create_directories(DumpPathC)) {
+    llvm::errs() << "Failed to create inputgen recording dump dir `"
+                 << DumpPathC << "' " << EC.message() << "\n";
+    return;
+  }
+
+  IRBuilder<> IRB(M.getContext());
+  GlobalVariable *DumpPathGV = IRB.CreateGlobalString(
+      DumpPathC, std::string(InputGenRuntimePrefix) + "input_dump_path", 0, &M);
+  DumpPathGV->setLinkage(llvm::GlobalValue::WeakAnyLinkage);
+
+  LoopAnalysisManager LAM;
+  FunctionAnalysisManager FAM;
+  CGSCCAnalysisManager CGAM;
+  ModuleAnalysisManager MAM;
+
+  PassBuilder PB;
+
+  // Register all the basic analyses with the managers.
+  PB.registerModuleAnalyses(MAM);
+  PB.registerCGSCCAnalyses(CGAM);
+  PB.registerFunctionAnalyses(FAM);
+  PB.registerLoopAnalyses(LAM);
+  PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
+
+  for (Function *EntryFunction : EntryFunctions) {
+    std::unique_ptr<Module> ReplayModule = CloneModule(M);
+
+    for (Function &F : *ReplayModule) {
+      if (F.getName() != EntryFunction->getName())
+        F.removeFnAttr(Attribute::InputGenEntry);
+      else
+        assert(F.hasFnAttribute(Attribute::InputGenEntry) &&
+               !F.isDeclaration());
+    }
+
+    StringRef DumpPathSR(DumpPathC);
+    SmallString<128> ThisEntryPath(DumpPathSR.begin(), DumpPathSR.end());
+
+    InputGenEntriesImpl EReplayImpl(*ReplayModule, MAM,
+                                    IGIMode::ReplayRecorded);
+    EReplayImpl.instrument();
+    InputGenMemoryImpl MReplayImpl(*ReplayModule, MAM, IGIMode::ReplayRecorded);
+    MReplayImpl.instrument();
+
+    std::error_code EC;
+    sys::path::append(ThisEntryPath, EntryFunction->getName());
+    if (auto EC = sys::fs::create_directories(ThisEntryPath)) {
+      llvm::errs() << "Failed to create inputgen recording dump dir `"
+                   << ThisEntryPath << "' " << EC.message() << "\n";
+      return;
+    }
+    sys::path::append(ThisEntryPath, "replay_module.bc");
+    llvm::raw_fd_ostream Out(ThisEntryPath, EC, llvm::sys::fs::OF_None);
+    if (EC) {
+      llvm::errs() << "Failed to open file: " << EC.message() << "\n";
+      continue;
+    }
+    llvm::errs() << "Dumping replay module to `" << ThisEntryPath << "'\n";
+    WriteBitcodeToFile(*ReplayModule, Out);
+  }
+}
+
 bool InputGenEntriesImpl::instrument() {
   if (Mode != IGIMode::Disabled) {
+
     bool Changed = false;
 
     for (auto &Fn : M.functions()) {
@@ -1083,6 +1140,9 @@ bool InputGenEntriesImpl::instrument() {
         OtherFunctions.push_back(&Fn);
       }
     }
+
+    if (Mode == IGIMode::Record)
+      createReplayRecordedModule();
 
     if (Mode == IGIMode::Generate || Mode == IGIMode::ReplayGenerated ||
         Mode == IGIMode::ReplayRecorded) {
@@ -1202,13 +1262,12 @@ bool InputGenEntriesImpl::createRecordingHooks() {
       Args.push_back(&Arg);
       IRB.CreateStore(&Arg, CurArgMem);
       CurArgMem = IRB.CreateConstGEP1_32(PtrTy, CurArgMem,
-                                       DL.getTypeStoreSize(Arg.getType()));
+                                         DL.getTypeStoreSize(Arg.getType()));
     }
 
     Value *FuncNameVal = IRB.CreateGlobalString(
         OriginalName, std::string(InputGenRuntimePrefix) +
-                                   "ig_record_entry_name." +
-                                   EntryPoint->getName());
+                          "ig_record_entry_name." + EntryPoint->getName());
     IRB.CreateCall(RecordPush, {FuncNameVal, ArgsMem});
     CallInst *Call = IRB.CreateCall(FunctionCallee(EntryPoint), Args);
     IRB.CreateCall(RecordPop, {FuncNameVal});

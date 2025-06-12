@@ -20,7 +20,7 @@ struct Range {
       : ObjIdx(ObjIdx), AnyRecorded(AnyRecorded), NegativeSize(NegativeSize),
         Begin(Begin), End(End) {}
   Range(std::ifstream &IFS);
-  Range(std::ifstream &IFS, char *Memory);
+  Range(std::ifstream &IFS, char *Memory, const std::string &Name);
 
   void write(std::ofstream &OFS);
 };

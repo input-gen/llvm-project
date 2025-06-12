@@ -98,10 +98,10 @@ Global::Global(std::ifstream &IFS, GlobalManager &GM) {
   auto Found = std::lower_bound(GM.Globals.begin(), GM.Globals.end(), Name,
                                 GlobalComp{});
   if (Found == GM.Globals.end() || Found->Name != Name) {
-    ERR("Could not find global with name {}\n", Name);
-    exit(1003);
+    R.init(Range(IFS, nullptr, Name));
+  } else {
+    R.init(Range(IFS, Found->Address, Name));
   }
-  R.init(Range(IFS, Found->Address));
 }
 
 void Global::write(std::ofstream &OFS) {
@@ -112,7 +112,7 @@ void Global::write(std::ofstream &OFS) {
   R->write(OFS);
 }
 
-Range::Range(std::ifstream &IFS, char *Memory) {
+Range::Range(std::ifstream &IFS, char *Memory, const std::string &Name) {
   DEFINE_READV(IFS);
   READV(ObjIdx);
   READV(NegativeSize);
@@ -124,7 +124,10 @@ Range::Range(std::ifstream &IFS, char *Memory) {
   End = Begin + Length;
   if (Length) {
     if (AnyRecorded) {
-      assert(Memory);
+      if (Memory) {
+        ERR("Could not find recorded global with name {}\n", Name);
+        abort();
+      }
       READMEM(IFS, Begin, Length);
     }
   } else {

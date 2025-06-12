@@ -59,3 +59,17 @@ add_compiler_rt_runtime(inputgen.replay
   CFLAGS ${INPUTGEN_CFLAGS}
   LINK_FLAGS ${INPUTGEN_LINK_FLAGS}
   PARENT_TARGET inputgen.replay)
+
+add_custom_target(inputgen.replay_recorded)
+set_target_properties(inputgen.replay_recorded PROPERTIES FOLDER "Compiler-RT Misc")
+
+add_compiler_rt_runtime(inputgen.replay_recorded
+  STATIC
+  ARCHS ${INPUTGEN_SUPPORTED_ARCH}
+  SOURCES
+    replay_recorded.cpp
+
+  ADDITIONAL_HEADERS ${INPUTGEN_HEADERS}
+  CFLAGS ${INPUTGEN_CFLAGS}
+  LINK_FLAGS ${INPUTGEN_LINK_FLAGS}
+  PARENT_TARGET inputgen.replay)

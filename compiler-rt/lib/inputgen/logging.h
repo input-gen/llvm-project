@@ -38,6 +38,11 @@ void DEBUG(const std::format_string<Args...> S, Args &&...As) {
 }
 
 template <typename... Args>
+void DEBUGF(const char *f, Args &&...As) {
+  INPUTGEN_DEBUG(fprintf(stderr, f, As...));
+}
+
+template <typename... Args>
 void WARN(const std::format_string<Args...> S, Args &&...As) {
   INPUTGEN_DEBUG(
       fputs(std::format(S, std::forward<Args>(As)...).c_str(), stderr));

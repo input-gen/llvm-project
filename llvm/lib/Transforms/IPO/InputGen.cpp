@@ -1087,12 +1087,12 @@ bool InputGenEntriesImpl::instrument() {
     if (Mode == IGIMode::Generate || Mode == IGIMode::ReplayGenerated ||
         Mode == IGIMode::ReplayRecorded) {
       Changed |= createEntryPoint();
-      Changed |= processFunctions();
     } else if (Mode == IGIMode::Record) {
       Changed |= createRecordingHooks();
     } else {
       llvm_unreachable("??");
     }
+    Changed |= processFunctions();
 
     return Changed;
   }
@@ -1115,7 +1115,7 @@ void processFunctionDefinitionForGenerate(Function *F) {
   F->setVisibility(GlobalValue::DefaultVisibility);
 }
 
-static void processFunctionDefinitionForReplayGenerated(Function *F) {
+static void processFunctionDefinitionForReplay(Function *F) {
   // We do not want any definitions to clash with any other modules we may
   // link in.
   F->setLinkage(GlobalValue::PrivateLinkage);
@@ -1146,11 +1146,12 @@ bool InputGenEntriesImpl::processFunctions() {
   for (Function *F : llvm::concat<Function *>(EntryFunctions, OtherFunctions)) {
     if (Mode == IGIMode::Generate)
       processFunctionDefinitionForGenerate(F);
-    if (Mode == IGIMode::ReplayGenerated)
-      processFunctionDefinitionForReplayGenerated(F);
+    if (Mode == IGIMode::ReplayGenerated || Mode == IGIMode::ReplayRecorded)
+      processFunctionDefinitionForReplay(F);
   }
 
-  collectIndirectCalleeCandidates();
+  if (Mode == IGIMode::Generate || Mode == IGIMode::ReplayGenerated)
+    collectIndirectCalleeCandidates();
 
   // Clean up the inputgen_entry attributes now that they are no longer needed
   for (Function &F : M)

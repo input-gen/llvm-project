@@ -135,7 +135,7 @@ struct ObjectManager {
     case 3:
       return UserObjLarge.access(VPtr, AccessSize, TypeId, AK == WRITE);
     default:
-      ERR("unknown encoding 1 {}\n", getEncoding(VPtr));
+      std::cerr << "unknown encoding 1 " << getEncoding(VPtr) << "\n";
       error(1003);
       std::terminate();
     }
@@ -173,7 +173,7 @@ struct ObjectManager {
     default:
       if (AllowToFail)
         return {-2, -2};
-      ERR("unknown encoding 2 {}\n", getEncoding(VPtr));
+      std::cerr << "unknown encoding 2 " << getEncoding(VPtr) << "\n";
       error(1004);
       std::terminate();
     }
@@ -187,7 +187,7 @@ struct ObjectManager {
     case 3:
       return UserObjLarge.getBasePtrInfo(VPtr);
     default:
-      ERR("unknown encoding 3 {}\n", getEncoding(VPtr));
+      std::cerr << "unknown encoding 3 " << getEncoding(VPtr) << "\n";
       error(1005);
       std::terminate();
     }
@@ -201,7 +201,7 @@ struct ObjectManager {
     case 3:
       return UserObjLarge.getBase(VPtr);
     default:
-      ERR("unknown encoding 4 {}\n", getEncoding(VPtr));
+      std::cerr << "unknown encoding 4 " << getEncoding(VPtr) << "\n";
       error(1005);
       std::terminate();
     }
@@ -215,7 +215,7 @@ struct ObjectManager {
     case 3:
       return UserObjLarge.getBaseVPtr(VPtr);
     default:
-      ERR("unknown encoding 5 {}\n", getEncoding(VPtr));
+      std::cerr << "unknown encoding 5 " << getEncoding(VPtr) << "\n";
       error(1005);
       std::terminate();
     }
@@ -249,9 +249,11 @@ struct ObjectManager {
       return TryToMakeObjNull(LHSPtr, *LHSTE, LHSOffset);
 
     if (LHSInfo < 0 || RHSInfo < 0) {
-      ERR("comparison of user object and runtime object! C/C++ UB detected! "
-          "({}[{}] {}[{}])\n",
-          LHSInfo, LHSOffset, RHSInfo, RHSOffset);
+      std::cerr
+          << "comparison of user object and runtime object! C/C++ UB detected! "
+             "("
+          << LHSInfo << "[" << LHSOffset << "] " << RHSInfo << "[" << RHSOffset
+          << "])\n";
       error(1006);
       std::terminate();
     }

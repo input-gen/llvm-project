@@ -109,9 +109,11 @@ char *FreeValueInfo::write(FreeValueManager &FVM) {
     __builtin_memcpy(MPtr, getValuePtr(FVM), ValueSize);
     if (ValueSize < CmpSize)
       __builtin_memset(MPtr + ValueSize, 0, CmpSize - ValueSize);
-    DEBUG("Written '{}' @ {} - {} [{} {}] ({})\n", MPtr, (void *)MPtr,
-          (void *)(MPtr + std::max(ValueSize, CmpSize)), ValueSize, CmpSize,
-          (void *)VPtr);
+    INPUTGEN_DEBUG(std::cerr
+                   << "Written '" << MPtr << "' @ " << (void *)MPtr << " - "
+                   << (void *)(MPtr + std::max(ValueSize, CmpSize)) << " ["
+                   << ValueSize << " " << CmpSize << "] (" << (void *)VPtr
+                   << ")\n");
     return getValuePtr(FVM);
   }
   case 12:
@@ -119,8 +121,9 @@ char *FreeValueInfo::write(FreeValueManager &FVM) {
     __builtin_memcpy(MPtr, getValuePtr(FVM), ValueSize);
     if (ValueSize < Size)
       __builtin_memset(MPtr + ValueSize, 0, Size - ValueSize);
-    DEBUG("Written '{}' @ {} - {}\n", *(uint32_t *)MPtr, (void *)MPtr,
-          (void *)(MPtr + ValueSize));
+    INPUTGEN_DEBUG(std::cerr << "Written '" << *(uint32_t *)MPtr << "' @ "
+                             << (void *)MPtr << " - "
+                             << (void *)(MPtr + ValueSize) << "\n");
     return getValuePtr(FVM);
   default:
     __builtin_memset(MPtr, 0, Size);
@@ -166,7 +169,7 @@ void FreeValueManager::checkBranchConditions(char *VP, char *VPBP, char *VCP,
         } else {
           BCI->IsFixed = true;
           if (!evaluate(*BCI)) {
-            INFO("Inconsistent branch condition found, abort\n");
+            std::cerr << "Inconsistent branch condition found, abort\n";
             error(1007);
           }
         }
@@ -183,8 +186,8 @@ void FreeValueManager::checkBranchConditions(char *VP, char *VPBP, char *VCP,
   for (auto *FVI : FVVec)
     FVI->write(*this);
 
-  DEBUG("Got {} free BCIs out of {} total, checking\n", FreeBCIs.size(),
-        SeenBCIs.size());
+  INPUTGEN_DEBUG(std::cerr << "Got " << FreeBCIs.size() << " free BCIs out of "
+                           << SeenBCIs.size() << " total, checking\n");
   bool AllWork = true;
   for (auto *BCI : FreeBCIs) {
     bool Result = evaluate(*BCI, FreeBCIs.size() == 10);
@@ -195,7 +198,7 @@ void FreeValueManager::checkBranchConditions(char *VP, char *VPBP, char *VCP,
   }
 
   if (!AllWork && !workOn(FVVec, FreeBCIs)) {
-    INFO("Could not make all BCIs work, abort\n");
+    std::cerr << "Could not make all BCIs work, abort\n";
     error(1008);
   }
 
@@ -235,7 +238,7 @@ bool FreeValueManager::isFreeValue(BranchConditionInfo &BCI,
     break;
   }
   default:
-    ERR("unexpected type id: {}\n", FVI.TypeId);
+    std::cerr << "unexpected type id: " << FVI.TypeId << "\n";
     __builtin_trap();
   }
 
@@ -275,7 +278,8 @@ bool FreeValueManager::modifyAndEvaluate(FreeValueInfo &FVI,
 bool FreeValueManager::evaluate(BranchConditionInfo &BCI, bool B) {
   uint32_t Outcome = BCI.Fn(BCI.ArgMemPtr);
   uint32_t DesiredOutcome = ThreadOM.getDesiredOutcome(BCI.No);
-  VERBOSE("BCI {}: {} vs {}\n", BCI.No, Outcome, DesiredOutcome);
+  INPUTGEN_DEBUG(std::cerr << "BCI " << BCI.No << ": " << Outcome << " vs "
+                           << DesiredOutcome << "\n");
   return (Outcome == DesiredOutcome);
 }
 

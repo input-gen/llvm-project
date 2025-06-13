@@ -141,17 +141,20 @@ int main(int argc, char **argv) {
   }
 
   if (static_cast<uint32_t>(EntryNo) >= __ig_num_entry_points) {
-    ERR("Entry {} is out of bounds, {} available\n", EntryNo,
-        __ig_num_entry_points);
+    std::cerr << "Entry " << EntryNo << " is out of bounds, "
+              << __ig_num_entry_points << " available\n";
     exit(static_cast<int>(ExitStatus::EntryNoOutOfBounds));
   }
 
   NumThreads = std::min(NumThreads, NumInputs);
 
   uint32_t NumInputsPerThread = NumInputs / NumThreads;
-  INFO("Generating {} inputs for entry {} with {} threads, starting with {}; "
-       "Seed: {}\n",
-       NumInputs, EntryNo, NumThreads, FirstInput, Seed);
+  std::cerr << "Generating " << NumInputs << " inputs for entry " << EntryNo
+            << " with " << NumThreads << " threads, starting with "
+            << FirstInput
+            << "; "
+               "Seed: "
+            << Seed << "\n";
 
   std::mt19937 Generator(Seed);
   std::vector<uint32_t> Seeds;

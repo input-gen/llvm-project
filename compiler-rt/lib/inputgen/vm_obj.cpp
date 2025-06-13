@@ -29,7 +29,8 @@ void ObjectManager::saveInput(uint32_t EntryNo, uint32_t InputIdx,
                               uint32_t ExitCode) {
 
   ErrorFn = [](uint32_t Code) {
-    ERR("Encountered error while saving input with code {}. Aborting.\n", Code);
+    std::cerr << "Encountered error while saving input with code " << Code
+              << ". Aborting.\n";
     exit(1);
   };
 

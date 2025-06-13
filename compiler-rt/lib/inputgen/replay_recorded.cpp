@@ -82,7 +82,7 @@ std::optional<RecordInput> restore_memory(const std::string &in_file) {
 
 int main(int argc, char *argv[]) {
   if (argc < 2) {
-    ERR("Usage: {} <file.inp> [<entry_no>]\n", argv[0]);
+    std::cerr << "Usage: " << argv[0] << " <file.inp> [<entry_no>]\n";
     printNumAvailableFunctions();
     printAvailableFunctions();
     exit(static_cast<int>(ExitStatus::WrongUsage));

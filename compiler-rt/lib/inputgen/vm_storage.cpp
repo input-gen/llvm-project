@@ -64,7 +64,8 @@ Range::Range(std::ifstream &IFS, char *Memory, const std::string &Name) {
   if (Length) {
     if (AnyRecorded) {
       if (Memory) {
-        ERR("Could not find recorded global with name {}\n", Name);
+        std::cerr << "Could not find recorded global with name " << Name
+                  << "\n";
         abort();
       }
       READMEM(IFS, Begin, Length);
@@ -83,7 +84,7 @@ Range::Range(std::ifstream &IFS) {
   READV(Length);
   if (Length) {
     Begin = (char *)malloc(Length);
-    DEBUG("malloc -- {}\n", (void *)Begin);
+    INPUTGEN_DEBUG(std::cerr << "malloc -- " << (void *)Begin << "\n");
     End = Begin + Length;
     if (AnyRecorded) {
       READMEM(IFS, Begin, Length);
@@ -234,8 +235,9 @@ void StorageManager::read(std::ifstream &IFS, GlobalManager &GM) {
     char *TgtObjPtr =
         &TgtObjRange.Begin[Ptr.TgtOffset + TgtObjRange.NegativeSize];
     *(char **)(ObjPtr) = TgtObjPtr;
-    DEBUG("repoint #{} at {} --> #{} at {}\n", Ptr.ObjIdx, (void *)ObjPtr,
-          Ptr.TgtObjIdx, (void *)TgtObjPtr);
+    INPUTGEN_DEBUG(std::cerr << "repoint #" << Ptr.ObjIdx << " at "
+                             << (void *)ObjPtr << " --> #" << Ptr.TgtObjIdx
+                             << " at " << (void *)TgtObjPtr << "\n");
   }
 }
 

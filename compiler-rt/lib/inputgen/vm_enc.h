@@ -301,7 +301,7 @@ struct BigObjSchemeTy : public EncodingSchemeTy {
   char *access(char *VPtr, uint32_t AccessSize, uint32_t TypeId, bool Write) {
     EncTy E(VPtr);
     auto [Base, Size] = Objects[E.Bits.ObjectIdx];
-    if (E.Bits.Offset < 0 || E.Bits.Offset + AccessSize > Size) {
+    if (E.Bits.Offset < 0 || E.Bits.Offset + AccessSize > (int64_t)Size) {
       fprintf(stderr,
               "Large user memory out-of-bound %lli vs %lli (Base %p)!\n",
               E.Bits.Offset, Size, Base);
@@ -400,7 +400,8 @@ struct TableSchemeTy : public EncodingSchemeTy {
       //
       // Check that the lower end of the object (NegativeSize) is actually on
       // the left side of the higher end (PositiveSize)
-      DEBUG("check {} <= {}\n", -NegativeSize, PositiveSize);
+      INPUTGEN_DEBUG(std::cerr << "check " << -NegativeSize
+                               << " <= " << PositiveSize << "\n");
       assert(PositiveSize >= -NegativeSize);
     }
 
@@ -409,8 +410,9 @@ struct TableSchemeTy : public EncodingSchemeTy {
         : Base(Base), Shadow(Base + PositiveSize + NegativeSize),
           NegativeSize(NegativeSize), GlobalName(GlobalName), Seed(Seed) {
       checkSizes(PositiveSize, NegativeSize);
-      DEBUG("TableEntryTy({}, {}, {}, {})", (void *)Base, PositiveSize,
-            NegativeSize, (bool)GlobalName);
+      INPUTGEN_DEBUG(std::cerr << "TableEntryTy(" << (void *)Base << ", "
+                               << PositiveSize << ", " << NegativeSize << ", "
+                               << (bool)GlobalName << ")");
     }
     char *getBase() const { return Base; }
     char *getShadow() const { return Shadow; }
@@ -485,8 +487,10 @@ struct TableSchemeTy : public EncodingSchemeTy {
       Base = NewBase;
       Shadow = NewBase + NewPositiveSize + NewNegativeSize;
       NegativeSize = NewNegativeSize;
-      DEBUG("update TableEntryTy({}, {}, {}, {})\n", (void *)getBase(),
-            getPositiveSize(), getNegativeSize(), (bool)GlobalName);
+      INPUTGEN_DEBUG(std::cerr << "update TableEntryTy(" << (void *)getBase()
+                               << ", " << getPositiveSize() << ", "
+                               << getNegativeSize() << ", " << (bool)GlobalName
+                               << ")\n");
     }
 
     void printShadow() const { dumpMemoryBinary(getShadow(), getShadowSize()); }
@@ -558,7 +562,7 @@ struct TableSchemeTy : public EncodingSchemeTy {
     Table[TEC] = TableEntryTy(Base, PositiveSize, NegativeSize, GlobalName,
                               getRTObjSeed());
     EncDecTy ED(DefaultOffset, TEC);
-    DEBUG(" --> {}\n", (void *)ED.VPtr);
+    INPUTGEN_DEBUG(std::cerr << " --> " << (void *)ED.VPtr << "\n");
     return ED.VPtr;
   }
 
@@ -584,7 +588,7 @@ struct TableSchemeTy : public EncodingSchemeTy {
     case 8:
       return *(uint64_t *)MPtr;
     default:
-      ERR("unexpected access size {}\n", AccessSize);
+      std::cerr << "unexpected access size " << AccessSize << "\n";
       __builtin_trap();
     }
   }
@@ -606,7 +610,7 @@ struct TableSchemeTy : public EncodingSchemeTy {
       *(uint64_t *)MPtr = Value;
       break;
     default:
-      ERR("unexpected access size {}\n", AccessSize);
+      std::cerr << "unexpected access size " << AccessSize << "\n";
       __builtin_trap();
     }
   }
@@ -729,11 +733,11 @@ struct TableSchemeTy : public EncodingSchemeTy {
     TableEntryTy &TE = Table[ED.Bits.TableIdx];
 
     int32_t RelOffset = (uint32_t)ED.Bits.Offset - DefaultOffset;
-    DEBUG("access at offset {}\n", RelOffset);
+    INPUTGEN_DEBUG(std::cerr << "access at offset " << RelOffset << "\n");
 
     auto Size = TE.getSize();
-    auto PositiveSize = TE.getPositiveSize();
-    auto NegativeSize = TE.getNegativeSize();
+    int32_t PositiveSize = TE.getPositiveSize();
+    int32_t NegativeSize = TE.getNegativeSize();
     if (-RelOffset > NegativeSize) [[unlikely]] {
       uint32_t Overshot = -RelOffset - NegativeSize;
       uint32_t NewNegativeSize =
@@ -742,7 +746,7 @@ struct TableSchemeTy : public EncodingSchemeTy {
       TE.grow(PositiveSize, NewNegativeSize);
       PositiveSize = TE.getPositiveSize();
       NegativeSize = TE.getNegativeSize();
-    } else if (RelOffset + AccessSize > PositiveSize) [[unlikely]] {
+    } else if (RelOffset + (int32_t)AccessSize > PositiveSize) [[unlikely]] {
       uint32_t Overshot = (RelOffset + AccessSize) - PositiveSize;
       uint32_t NewPositiveSize =
           std::max(4 * Overshot, 4 * Size) + PositiveSize;
@@ -753,7 +757,7 @@ struct TableSchemeTy : public EncodingSchemeTy {
       NegativeSize = TE.getNegativeSize();
     }
     auto OffsetFromBase = RelOffset + NegativeSize;
-    DEBUG("offset from base {}\n", OffsetFromBase);
+    INPUTGEN_DEBUG(std::cerr << "offset from base " << OffsetFromBase << "\n");
     auto Div = OffsetFromBase >> 1;
     auto Mod = OffsetFromBase & 1;
     char *ShadowP = (TE.getShadow() + Div);

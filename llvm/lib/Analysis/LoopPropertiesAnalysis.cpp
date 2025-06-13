@@ -161,7 +161,7 @@ LoopPropertiesInfo::get(Loop &L, LoopInfo &LI, ScalarEvolution &SE,
       for (auto *Op : I->operand_values())
         if (auto *OpI = dyn_cast<Instruction>(Op))
           Worklist.push_back(OpI);
-      Cost += *ICost.getValue();
+      Cost += ICost.getValue();
     }
     return Cost;
   };
@@ -243,7 +243,7 @@ LoopPropertiesInfo::get(Loop &L, LoopInfo &LI, ScalarEvolution &SE,
     const auto &ICost =                                                        \
         TTI->getInstructionCost(&I, TargetTransformInfo::TCK_##KIND);          \
     LPI.LoopInsts##KIND += ICost;                                              \
-    ++LPI.InstructionCosts##KIND[ICost.getValue().value_or(-1)];               \
+    ++LPI.InstructionCosts##KIND[ICost.isValid() ? ICost.getValue() : -1];     \
   }
         INSTCOST(RecipThroughput)
         INSTCOST(Latency)
@@ -553,7 +553,7 @@ void LoopPropertiesInfo::print(raw_ostream &OS) const {
 #define INSTCOST_PROP(NAME)                                                    \
   OS << "Loop instruction costs (" #NAME "): ";                                \
   if (NAME.isValid())                                                          \
-    OS << *NAME.getValue() << "\n";                                            \
+    OS << NAME.getValue() << "\n";                                             \
   else                                                                         \
     OS << "<invalid>\n";
 #define MAP_PROP(NAME)                                                         \
@@ -642,10 +642,8 @@ void LoopPropertiesInfo::print(raw_ostream &OS) const {
       RK_CASE(FMinimum)
       RK_CASE(FMaximum)
       RK_CASE(FMulAdd)
-      RK_CASE(IAnyOf)
-      RK_CASE(FAnyOf)
-      RK_CASE(IFindLastIV)
-      RK_CASE(FFindLastIV);
+      RK_CASE(AnyOf)
+      RK_CASE(FindLastIV)
 #undef RK_CASE
     default:
       return "Unknown";

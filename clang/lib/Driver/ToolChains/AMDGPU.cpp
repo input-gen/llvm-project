@@ -7,7 +7,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "AMDGPU.h"
-#include "CommonArgs.h"
 #include "clang/Basic/Sanitizers.h"
 #include "clang/Basic/TargetID.h"
 #include "clang/Config/config.h"

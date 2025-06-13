@@ -486,7 +486,7 @@ bool InstrumentorImpl::shouldInstrumentTarget() {
       errs() << "WARNING: failed to parse target regex: " << ErrMsg << "\n";
       return false;
     }
-    RegexMatches = TargetRegex.match(TripleStr);
+    RegexMatches = TargetRegex.match(TripleStr.str());
   }
 
   return ((IsGPU && IConf.GPUEnabled->getBool()) ||
@@ -2494,7 +2494,7 @@ Value *ModuleIO::getTargetTriple(Value &V, Type &Ty,
                                  InstrumentationConfig &IConf,
                                  InstrumentorIRBuilderTy &IIRB) {
   auto &Fn = cast<Function>(V);
-  return IConf.getGlobalString(Fn.getParent()->getTargetTriple(), IIRB);
+  return IConf.getGlobalString(Fn.getParent()->getTargetTriple().str(), IIRB);
 }
 
 Value *GlobalIO::getAddress(Value &V, Type &Ty, InstrumentationConfig &IConf,

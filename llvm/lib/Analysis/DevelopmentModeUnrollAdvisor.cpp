@@ -250,7 +250,7 @@ DevelopmentUnrollAdvisor::getAdviceImpl(UnrollAdviceInfo UAI) {
   {                                                                            \
     int64_t ToAssign;                                                          \
     if (auto V = LPI.NAME.getValue())                                          \
-      ToAssign = *V;                                                           \
+      ToAssign = V;                                                            \
     else                                                                       \
       ToAssign = -1;                                                           \
     *ModelRunner->getTensor<int64_t>(UnrollFeatureIndex::NAME) = ToAssign;     \

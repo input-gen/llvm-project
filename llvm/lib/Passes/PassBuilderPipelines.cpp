@@ -81,7 +81,6 @@
 #include "llvm/Transforms/Instrumentation/InstrProfiling.h"
 #include "llvm/Transforms/Instrumentation/MemProfInstrumentation.h"
 #include "llvm/Transforms/Instrumentation/MemProfUse.h"
-#include "llvm/Transforms/Instrumentation/Instrumentor.h"
 #include "llvm/Transforms/Instrumentation/PGOCtxProfFlattening.h"
 #include "llvm/Transforms/Instrumentation/PGOCtxProfLowering.h"
 #include "llvm/Transforms/Instrumentation/PGOForceFunctionAttrs.h"

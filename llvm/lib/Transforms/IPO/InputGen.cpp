@@ -1237,6 +1237,8 @@ bool InputGenEntriesImpl::createRecordingHooks() {
     for (auto &Arg : IGEntry->args()) {
       Args.push_back(&Arg);
       IRB.CreateStore(&Arg, CurArgMem);
+      // NOTE we mistakenly use ptr as the basis instead of i8. leave it as is
+      // for now because we have a lot of inputs using this...
       CurArgMem = IRB.CreateConstGEP1_32(PtrTy, CurArgMem,
                                          DL.getTypeStoreSize(Arg.getType()));
     }
@@ -1305,6 +1307,8 @@ bool InputGenEntriesImpl::createEntryPoint() {
       auto *LI = new LoadInst(Arg.getType(), WrapperObjPtr, Arg.getName(),
                               WrapperEntryBB);
       Parameters.push_back(LI);
+      // NOTE we mistakenly use ptr as the basis instead of i8. leave it as is
+      // for now because we have a lot of inputs using this...
       WrapperObjPtr = GetElementPtrInst::Create(
           PtrTy, WrapperObjPtr,
           {ConstantInt::get(I32Ty, DL.getTypeStoreSize(Arg.getType()))}, "",

@@ -246,10 +246,7 @@ private:
 };
 
 struct InputGenEntriesImpl {
-  InputGenEntriesImpl(Module &M, ModuleAnalysisManager &MAM, IGIMode Mode)
-      : M(M), MAM(MAM), Mode(Mode),
-        FAM(MAM.getResult<FunctionAnalysisManagerModuleProxy>(M).getManager()) {
-  }
+  InputGenEntriesImpl(Module &M, IGIMode Mode) : M(M), Mode(Mode) {}
 
   bool instrument();
 
@@ -261,12 +258,8 @@ private:
   bool processOtherFunctions();
   void collectIndirectCalleeCandidates();
 
-  FunctionAnalysisManager &getFAM() { return FAM; };
-
   Module &M;
-  ModuleAnalysisManager &MAM;
   const IGIMode Mode;
-  FunctionAnalysisManager &FAM;
   const DataLayout &DL = M.getDataLayout();
 
   // The below three vectors contain all Functions in the module.
@@ -1074,20 +1067,6 @@ void InputGenEntriesImpl::createReplayRecordedModule() {
       DumpPathC, std::string(InputGenRuntimePrefix) + "input_dump_path", 0, &M);
   DumpPathGV->setLinkage(llvm::GlobalValue::WeakAnyLinkage);
 
-  LoopAnalysisManager LAM;
-  FunctionAnalysisManager FAM;
-  CGSCCAnalysisManager CGAM;
-  ModuleAnalysisManager MAM;
-
-  PassBuilder PB;
-
-  // Register all the basic analyses with the managers.
-  PB.registerModuleAnalyses(MAM);
-  PB.registerCGSCCAnalyses(CGAM);
-  PB.registerFunctionAnalyses(FAM);
-  PB.registerLoopAnalyses(LAM);
-  PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
-
   for (Function *EntryFunction : EntryFunctions) {
     std::unique_ptr<Module> ReplayModule = CloneModule(M);
 
@@ -1102,11 +1081,8 @@ void InputGenEntriesImpl::createReplayRecordedModule() {
     StringRef DumpPathSR(DumpPathC);
     SmallString<128> ThisEntryPath(DumpPathSR.begin(), DumpPathSR.end());
 
-    InputGenEntriesImpl EReplayImpl(*ReplayModule, MAM,
-                                    IGIMode::ReplayRecorded);
+    InputGenEntriesImpl EReplayImpl(*ReplayModule, IGIMode::ReplayRecorded);
     EReplayImpl.instrument();
-    InputGenMemoryImpl MReplayImpl(*ReplayModule, MAM, IGIMode::ReplayRecorded);
-    MReplayImpl.instrument();
 
     std::error_code EC;
     sys::path::append(ThisEntryPath, EntryFunction->getName());
@@ -1497,7 +1473,7 @@ bool tagEntries(Module &M) {
 PreservedAnalyses
 InputGenInstrumentEntriesPass::run(Module &M, AnalysisManager<Module> &MAM) {
   IGIMode Mode = ClInstrumentationMode;
-  InputGenEntriesImpl Impl(M, MAM, Mode);
+  InputGenEntriesImpl Impl(M, Mode);
 
   bool Changed = false;
 

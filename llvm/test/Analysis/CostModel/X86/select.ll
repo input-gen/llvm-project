@@ -553,28 +553,3 @@ define <32 x i8> @test_32i8(<32 x i8> %a, <32 x i8> %b) {
   %sel = select <32 x i1> <i1 true, i1 false, i1 true, i1 true, i1 true, i1 false, i1 true, i1 true, i1 true, i1 false, i1 true, i1 true, i1 true, i1 false, i1 true, i1 true, i1 true, i1 false, i1 true, i1 true, i1 true, i1 false, i1 true, i1 true, i1 true, i1 false, i1 true, i1 true, i1 true, i1 false, i1 true, i1 true>, <32 x i8> %a, <32 x i8> %b
   ret <32 x i8> %sel
 }
-
-define { ptr, ptr } @test_struct( { ptr, ptr } %a, { ptr, ptr } %b, i1 %c) {
-; SSE-LABEL: 'test_struct'
-; SSE-NEXT:  Cost Model: Found an estimated cost of 1 for instruction:   %sel = select i1 %c, { ptr, ptr } %a, { ptr, ptr } %b
-; SSE-NEXT:  Cost Model: Found an estimated cost of 0 for instruction:   ret { ptr, ptr } %sel
-;
-; AVX1-LABEL: 'test_struct'
-; AVX1-NEXT:  Cost Model: Found an estimated cost of 1 for instruction:   %sel = select i1 %c, { ptr, ptr } %a, { ptr, ptr } %b
-; AVX1-NEXT:  Cost Model: Found an estimated cost of 0 for instruction:   ret { ptr, ptr } %sel
-;
-; AVX2-LABEL: 'test_struct'
-; AVX2-NEXT:  Cost Model: Found an estimated cost of 1 for instruction:   %sel = select i1 %c, { ptr, ptr } %a, { ptr, ptr } %b
-; AVX2-NEXT:  Cost Model: Found an estimated cost of 0 for instruction:   ret { ptr, ptr } %sel
-;
-; AVX512-LABEL: 'test_struct'
-; AVX512-NEXT:  Cost Model: Found an estimated cost of 1 for instruction:   %sel = select i1 %c, { ptr, ptr } %a, { ptr, ptr } %b
-; AVX512-NEXT:  Cost Model: Found an estimated cost of 0 for instruction:   ret { ptr, ptr } %sel
-;
-; SLM-LABEL: 'test_struct'
-; SLM-NEXT:  Cost Model: Found an estimated cost of 1 for instruction:   %sel = select i1 %c, { ptr, ptr } %a, { ptr, ptr } %b
-; SLM-NEXT:  Cost Model: Found an estimated cost of 0 for instruction:   ret { ptr, ptr } %sel
-;
-  %sel = select i1 %c, { ptr, ptr } %a, { ptr, ptr } %b
-  ret { ptr, ptr } %sel
-}

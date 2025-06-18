@@ -341,42 +341,16 @@ DevelopmentUnrollAdvisor::getAdviceImpl(UnrollAdviceInfo UAI) {
 
   UnrollDecisionTy UD = ModelRunner->getOutput<UnrollDecisionTy>();
 
-  std::optional<unsigned> UnrollFactor;
-
-  auto IsMinusOne = [](float F) { return -0.99 >= F && F >= -1.01; };
-  // Handle some special cases useful for training and evaluation.
-  if (llvm::all_of(
-          llvm::make_range(UD.Out, UD.Out + UnrollModelOutputLength - 1),
-          IsMinusOne)) {
-    float Last = UD.Out[UnrollModelOutputLength - 1];
-    if (IsMinusOne(Last)) {
-      LLVM_DEBUG(DBGS() << "got advice 'no decision'\n");
-      UnrollFactor = std::nullopt;
-    } else {
-      long long LargeFactor = std::llround(Last);
-      assert(LargeFactor > MaxUnrollFactor);
-      UnrollFactor = LargeFactor;
-      LLVM_DEBUG(DBGS() << "got large advice factor " << *UnrollFactor << "\n");
-    }
+  std::optional<unsigned> Factor = convertUnrollDecisionToAdviceFactor(UD);
+  if (!Factor) {
+    LLVM_DEBUG(DBGS() << "got advice nodecision\n");
+  } else if (*Factor == 0) {
+    LLVM_DEBUG(DBGS() << "got advice nounroll\n");
   } else {
-    // The model gives us a speedup estimate for each unroll factor in
-    // [0,MaxUnrollFactor] whose indices are offset by UnrollFactorOffset.
-    float *MaxEl = std::max_element(UD.Out, UD.Out + UnrollModelOutputLength);
-
-    // Only unroll if the biggest estimated speedup is greater than 1.0.
-    if (*MaxEl > 1.0) {
-      unsigned ArgMax = std::distance(UD.Out, MaxEl);
-      UnrollFactor = ArgMax + UnrollFactorOffset;
-      LLVM_DEBUG(DBGS() << "got advice factor " << *UnrollFactor << "\n");
-    } else {
-      // Returning std::nullopt means that we made no decision, whereas we want
-      // to say "we decided not to unroll", which is 0.
-      UnrollFactor = 0;
-      LLVM_DEBUG(DBGS() << "got advice nounroll\n");
-    }
+    LLVM_DEBUG(DBGS() << "got advice factor " << *Factor << "\n");
   }
 
-  return std::make_unique<DevelopmentUnrollAdvice>(this, UnrollFactor);
+  return std::make_unique<DevelopmentUnrollAdvice>(this, Factor);
 }
 
 } // namespace
@@ -413,6 +387,18 @@ const std::vector<TensorSpec> llvm::mlgo::UnrollFeatureMap{
 };
 // clang-format on
 
-const char *const llvm::mlgo::UnrollDecisionName = "unrolling_decision";
-const TensorSpec llvm::mlgo::UnrollDecisionSpec = TensorSpec::createSpec<float>(
-    UnrollDecisionName, {UnrollModelOutputLength});
+const char *const llvm::mlgo::UnrollDecisionName = "unroll_decision";
+const TensorSpec llvm::mlgo::UnrollDecisionSpec =
+    TensorSpec::createSpec<int64_t>(UnrollDecisionName, {1});
+
+std::optional<unsigned>
+llvm::mlgo::convertUnrollDecisionToAdviceFactor(UnrollDecisionTy UD) {
+  std::optional<unsigned> UnrollFactor;
+  if (UD == -1) {
+    UnrollFactor = std::nullopt;
+  } else {
+    assert(UD >= 0);
+    UnrollFactor = UD;
+  }
+  return UnrollFactor;
+}

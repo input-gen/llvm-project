@@ -1,4 +1,5 @@
 import interactive_host
+import json
 import sys
 
 
@@ -8,24 +9,26 @@ def main(args):
         counter = 0
 
         def advice(self, _):
-            l = [0.5 for _ in range(1 + 32 - 2)]
-            l[int(args[0])] = float(args[1])
-            return l
+            return int(args[0])
 
         def before_advice(self, tc, fc):
-            json = fc.readline()
-            print(json)
-            heuristic = int.from_bytes(fc.read(8))
+            print("BEFORE_ADVICE")
+            json_str = fc.readline()
+            print(json_str)
+            assert 'heuristic' in json.loads(json_str)
+            heuristic = int.from_bytes(fc.read(8), byteorder=sys.byteorder, signed=True)
             print(heuristic)
             fc.readline()
 
         def after_advice(self, tc, fc):
-            json = fc.readline()
-            print(json)
+            print("AFTER_ADVICE")
+            json_str = fc.readline()
+            print(json_str)
+            assert 'action' in json.loads(json_str)
             action = bool(int.from_bytes(fc.read(1)))
             print(action)
             fc.readline()
-            if args[2] == 'instrument':
+            if args[1] == 'instrument':
                 tc.write(bytes([1]))
                 begin = ("test_loop_begin_" + str(self.counter)).encode('ascii') + bytes([0])
                 end = ("test_loop_end_" + str(self.counter)).encode('ascii') + bytes([0])
@@ -39,9 +42,9 @@ def main(args):
                 tc.flush()
 
     a = Advisor()
-    interactive_host.run_interactive(args[3],
+    interactive_host.run_interactive(args[2],
                                      a.advice,
-                                     args[4:],
+                                     args[3:],
                                      a.before_advice,
                                      a.after_advice)
 

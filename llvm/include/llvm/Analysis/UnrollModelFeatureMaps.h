@@ -174,22 +174,15 @@ enum class UnrollFeatureIndex : size_t {
 };
 // clang-format on
 
-// These need to be kept in sync with the ones in unrolling_runner.py
-static constexpr unsigned MaxUnrollFactor = 32;
-static constexpr unsigned UnrollFactorOffset = 2;
-// + 1 because inclusive
-static constexpr unsigned UnrollModelOutputLength =
-    1 + MaxUnrollFactor - UnrollFactorOffset;
-
-struct UnrollDecisionTy {
-  float Out[UnrollModelOutputLength];
-};
-static_assert(offsetof(UnrollDecisionTy, Out) == 0);
+using UnrollDecisionTy = int;
 
 extern const std::vector<TensorSpec> UnrollFeatureMap;
 
 extern const char *const UnrollDecisionName;
 extern const TensorSpec UnrollDecisionSpec;
+
+std::optional<unsigned>
+convertUnrollDecisionToAdviceFactor(UnrollDecisionTy UD);
 
 } // namespace mlgo
 } // namespace llvm

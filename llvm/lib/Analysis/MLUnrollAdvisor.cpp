@@ -148,29 +148,20 @@ MLUnrollAdvisor::getAdviceImpl(UnrollAdviceInfo UAI) {
 
   UnrollDecisionTy UD = ModelRunner->evaluate<UnrollDecisionTy>();
 
-  // The model gives us a speedup estimate for each unroll factor in
-  // [2,MaxUnrollFactor] whose indices are offset by UnrollFactorOffset.
-  float *MaxEl = std::max_element(UD.Out, UD.Out + UnrollModelOutputLength);
-
-  // Only unroll if the biggest estimated speedup is greater than 1.0.
-  std::optional<unsigned> UnrollFactor;
-  if (*MaxEl > 1.0) {
-    unsigned ArgMax = std::distance(UD.Out, MaxEl);
-    UnrollFactor = ArgMax + UnrollFactorOffset;
-    LLVM_DEBUG(DBGS() << "got advice factor " << *UnrollFactor << "\n");
-  } else {
-    // Returning std::nullopt means that we made no decision, i.e. we delegated
-    // the decision to later handlers. Thus, we need to return 0 meaning "we
-    // decided we should not unroll".
-    UnrollFactor = 0;
-    LLVM_DEBUG(DBGS() << "got advice nounroll\n");
-  }
-
   // TODO check if we did not accidentally unroll with a factor greater thatn
   // the number of iterations. We should fix that here. (but not in the
   // development mode one because we want the model to learn that it is bad)
 
-  return std::make_unique<UnrollAdvice>(this, UnrollFactor);
+  std::optional<unsigned> Factor = convertUnrollDecisionToAdviceFactor(UD);
+  if (!Factor) {
+    LLVM_DEBUG(DBGS() << "got advice nodecision\n");
+  } else if (*Factor == 0) {
+    LLVM_DEBUG(DBGS() << "got advice nounroll\n");
+  } else if (*Factor == 1) {
+    LLVM_DEBUG(DBGS() << "got advice factor " << *Factor << "\n");
+  }
+
+  return std::make_unique<UnrollAdvice>(this, Factor);
 }
 
 #else // defined(LLVM_HAVE_TFLITE)

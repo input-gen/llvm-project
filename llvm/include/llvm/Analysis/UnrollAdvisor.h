@@ -105,7 +105,7 @@ private:
   bool AdviceGiven = false;
 };
 
-/// Interface for deciding whether to inline a call site or not.
+/// Interface for choosing unroll factors
 class UnrollAdvisor {
 public:
   UnrollAdvisor(UnrollAdvisor &&) = delete;

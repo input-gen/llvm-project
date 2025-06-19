@@ -13,6 +13,7 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <span>
 
 // We are depending on this = false to be embedded as an initial value in the
 // global of the binary so that we have it set to false before we get the call
